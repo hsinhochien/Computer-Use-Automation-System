@@ -1,0 +1,98 @@
+{
+  "version": "1.0",
+  "artifactId": "member-balance-query",
+  "name": "Member Balance Query",
+  "description": "Reusable workflow for checking a member balance",
+  "taskTemplate": "Check the balance for member {{memberId}}",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "startUrl": "https://example.com/member-search",
+  "parameters": [
+    {
+      "name": "memberId",
+      "type": "string",
+      "required": true,
+      "secret": false,
+      "description": "Member identifier"
+    }
+  ],
+  "safety": {
+    "redactInputs": true,
+    "redactOutputs": true,
+    "allowedDomains": ["example.com"],
+    "blockedActions": ["delete", "submit_payment", "export_data", "admin_change"]
+  },
+  "steps": [
+    {
+      "id": "goto-search",
+      "kind": "goto",
+      "url": "https://example.com/member-search",
+      "description": "Navigate to the member search page",
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false
+    },
+    {
+      "id": "wait-search-input",
+      "kind": "waitFor",
+      "selector": "#member-id",
+      "description": "Wait for the member ID input",
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false
+    },
+    {
+      "id": "fill-member-id",
+      "kind": "fill",
+      "selector": "#member-id",
+      "value": "{{memberId}}",
+      "description": "Fill the member ID",
+      "risk": "low",
+      "sensitive": true,
+      "continueOnError": false
+    },
+    {
+      "id": "click-search",
+      "kind": "click",
+      "selector": "#search-btn",
+      "description": "Click the search button",
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false
+    },
+    {
+      "id": "human-check-before-read",
+      "kind": "humanApproval",
+      "description": "Confirm the result section is correct and does not expose unauthorized sensitive data",
+      "risk": "medium",
+      "sensitive": false,
+      "continueOnError": false
+    },
+    {
+      "id": "wait-balance-result",
+      "kind": "waitFor",
+      "selector": "#balance",
+      "description": "Wait for the balance result to appear",
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false
+    },
+    {
+      "id": "extract-balance",
+      "kind": "extractText",
+      "selector": "#balance",
+      "outputKey": "balance",
+      "description": "Extract the balance text",
+      "risk": "low",
+      "sensitive": true,
+      "continueOnError": false
+    },
+    {
+      "id": "screenshot-result",
+      "kind": "screenshot",
+      "description": "Save a screenshot of the result",
+      "risk": "low",
+      "sensitive": true,
+      "continueOnError": false
+    }
+  ]
+}

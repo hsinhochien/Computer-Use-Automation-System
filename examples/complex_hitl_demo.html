@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Complex HITL Member Lookup Demo</title>
+    <style>
+      body { font-family: sans-serif; margin: 2rem; background: #f3f6fb; color: #16202a; }
+      .shell { max-width: 760px; margin: 0 auto; background: white; border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,0.08); overflow: hidden; }
+      .header { padding: 1.25rem 1.5rem; background: linear-gradient(135deg, #0b63f6, #4e8efc); color: white; }
+      .body { padding: 1.5rem; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .field { display: flex; flex-direction: column; gap: 0.4rem; }
+      label { font-size: 0.95rem; font-weight: 600; }
+      input, select, button { font-size: 1rem; padding: 0.8rem 0.9rem; border-radius: 10px; border: 1px solid #cfd8e3; }
+      input:focus, select:focus { outline: 2px solid #9dc1ff; border-color: #6fa0fa; }
+      .full { grid-column: 1 / -1; }
+      .toolbar { margin-top: 1rem; display: flex; gap: 0.75rem; align-items: center; }
+      .primary { background: #0b63f6; color: white; border: none; cursor: pointer; }
+      .secondary { background: #eef3fb; color: #1c3557; border: 1px solid #c8d6eb; cursor: pointer; }
+      .gate { margin-top: 1rem; padding: 1rem; border-radius: 12px; background: #fff7e6; border: 1px solid #f1d79a; }
+      .gate strong { display: block; margin-bottom: 0.35rem; }
+      .checkbox-row { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.75rem; }
+      .checkbox-row input { width: 18px; height: 18px; padding: 0; }
+      .result { margin-top: 1.25rem; padding: 1rem; border-radius: 12px; background: #f7f9fc; border: 1px solid #e1e8f2; }
+      .result-row { display: flex; gap: 1rem; margin-top: 0.35rem; }
+      .result-label { width: 140px; font-weight: 600; color: #35506f; }
+      .banner { margin-top: 1rem; padding: 0.9rem 1rem; border-radius: 10px; background: #fdf1f1; border: 1px solid #efc6c6; color: #8a2c2c; }
+      .hidden { display: none; }
+      .pill { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.85rem; background: rgba(255,255,255,0.22); }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="header">
+        <h1>Member Access Review Console</h1>
+        <div class="pill">Demo requiring HITL-friendly intervention</div>
+      </div>
+      <div class="body">
+        <p>This demo intentionally adds more fields and a manual compliance gate before a balance can be revealed.</p>
+
+        <div class="grid">
+          <div class="field">
+            <label for="region-select">Region</label>
+            <select id="region-select">
+              <option value="">Choose a region</option>
+              <option value="north-america">North America</option>
+              <option value="apac">APAC</option>
+              <option value="emea">EMEA</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="lookup-mode">Lookup mode</label>
+            <select id="lookup-mode">
+              <option value="">Choose a mode</option>
+              <option value="member-id">Member ID</option>
+              <option value="policy-id">Policy ID</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="member-number">Member number</label>
+            <input id="member-number" aria-label="Member number" type="text" placeholder="Enter member number" />
+          </div>
+
+          <div class="field">
+            <label for="agent-code">Agent code</label>
+            <input id="agent-code" aria-label="Agent code" type="text" placeholder="Example: AGENT-77" />
+          </div>
+
+          <div class="field full">
+            <label for="case-note">Case note</label>
+            <input id="case-note" aria-label="Case note" type="text" placeholder="Reason for reviewing the member balance" />
+          </div>
+        </div>
+
+        <div id="compliance-gate" class="gate">
+          <strong>Manual compliance checkpoint</strong>
+          <div>A human operator must confirm the member has given consent before revealing financial data.</div>
+          <div class="checkbox-row">
+            <input id="consent-checkbox" type="checkbox" />
+            <label for="consent-checkbox">I manually verified consent for this lookup.</label>
+          </div>
+        </div>
+
+        <div id="validation-banner" class="banner hidden"></div>
+
+        <div class="toolbar">
+          <button id="review-btn" class="primary">Review balance</button>
+          <button id="reset-btn" class="secondary">Reset</button>
+        </div>
+
+        <div class="result" id="result-panel">
+          <div class="result-row"><div class="result-label">Status</div><div data-role="status-text">Awaiting review</div></div>
+          <div class="result-row"><div class="result-label">Selected region</div><div data-role="region-text">--</div></div>
+          <div class="result-row"><div class="result-label">Lookup mode</div><div data-role="mode-text">--</div></div>
+          <div class="result-row"><div class="result-label">Balance</div><div data-role="balance-text">--</div></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const fakeDb = {
+        '12345': 'USD 2,500',
+        '67890': 'USD 990',
+        '99999': 'USD 14,010'
+      };
+
+      const regionSelect = document.getElementById('region-select');
+      const lookupMode = document.getElementById('lookup-mode');
+      const memberNumber = document.getElementById('member-number');
+      const agentCode = document.getElementById('agent-code');
+      const caseNote = document.getElementById('case-note');
+      const consentCheckbox = document.getElementById('consent-checkbox');
+      const validationBanner = document.getElementById('validation-banner');
+      const reviewBtn = document.getElementById('review-btn');
+      const resetBtn = document.getElementById('reset-btn');
+      const statusText = document.querySelector('[data-role="status-text"]');
+      const regionText = document.querySelector('[data-role="region-text"]');
+      const modeText = document.querySelector('[data-role="mode-text"]');
+      const balanceText = document.querySelector('[data-role="balance-text"]');
+
+      function setBanner(message) {
+        validationBanner.textContent = message;
+        validationBanner.classList.remove('hidden');
+      }
+
+      function clearBanner() {
+        validationBanner.textContent = '';
+        validationBanner.classList.add('hidden');
+      }
+
+      reviewBtn.addEventListener('click', () => {
+        clearBanner();
+
+        if (!regionSelect.value) {
+          setBanner('Select a region before reviewing the balance.');
+          statusText.textContent = 'Blocked: region required';
+          return;
+        }
+        if (!lookupMode.value) {
+          setBanner('Select a lookup mode before reviewing the balance.');
+          statusText.textContent = 'Blocked: lookup mode required';
+          return;
+        }
+        if (!memberNumber.value.trim()) {
+          setBanner('Enter a member number before reviewing the balance.');
+          statusText.textContent = 'Blocked: member number required';
+          return;
+        }
+        if (!agentCode.value.trim()) {
+          setBanner('Enter an agent code before reviewing the balance.');
+          statusText.textContent = 'Blocked: agent code required';
+          return;
+        }
+        if (!caseNote.value.trim()) {
+          setBanner('Enter a case note before reviewing the balance.');
+          statusText.textContent = 'Blocked: case note required';
+          return;
+        }
+        if (!consentCheckbox.checked) {
+          setBanner('Manual consent confirmation is required before revealing the balance.');
+          statusText.textContent = 'Blocked: manual consent required';
+          return;
+        }
+
+        statusText.textContent = 'Review completed';
+        regionText.textContent = regionSelect.options[regionSelect.selectedIndex].text;
+        modeText.textContent = lookupMode.options[lookupMode.selectedIndex].text;
+        balanceText.textContent = fakeDb[memberNumber.value.trim()] || 'USD 0';
+      });
+
+      resetBtn.addEventListener('click', () => {
+        regionSelect.value = '';
+        lookupMode.value = '';
+        memberNumber.value = '';
+        agentCode.value = '';
+        caseNote.value = '';
+        consentCheckbox.checked = false;
+        clearBanner();
+        statusText.textContent = 'Awaiting review';
+        regionText.textContent = '--';
+        modeText.textContent = '--';
+        balanceText.textContent = '--';
+      });
+    </script>
+  </body>
+</html>

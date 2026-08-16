@@ -1,0 +1,151 @@
+{
+  "version": "1.0",
+  "artifactId": "member-balance-query",
+  "name": "Member Balance Query",
+  "description": "LLM-driven discovered workflow | thoughts: The member number field is empty and a reliable selector is available, so the next step is to fill in the requested member ID. | The member ID is already filled and the balance has not been revealed yet, so the next safe step is to click the primary reveal/search button. | The balance is already visible and meaningful, so the task is complete.",
+  "taskTemplate": "Check the balance for member {{memberId}}",
+  "createdAt": "2026-08-16T21:44:07.086866Z",
+  "startUrl": "http://localhost:8000/examples/vision_demo.html",
+  "parameters": [
+    {
+      "name": "memberId",
+      "type": "string",
+      "required": true,
+      "secret": false,
+      "description": "Member identifier"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "balance",
+      "type": "string",
+      "description": "Member balance text",
+      "sensitive": true
+    }
+  ],
+  "successCondition": {
+    "type": "text_not_equals",
+    "selector": "[data-role=\"balance-text\"]",
+    "expectedText": "--",
+    "description": "The result element should contain a resolved balance instead of the placeholder."
+  },
+  "safety": {
+    "redactInputs": true,
+    "redactOutputs": true,
+    "allowedDomains": [
+      "localhost"
+    ],
+    "blockedActions": [
+      "delete",
+      "submit_payment",
+      "export_data",
+      "admin_change"
+    ]
+  },
+  "steps": [
+    {
+      "id": "step-001-fill",
+      "kind": "fill",
+      "selector": "input[aria-label=\"Member number\"]",
+      "target": {
+        "strategy": "css",
+        "primary": "input[aria-label=\"Member number\"]",
+        "fallbacks": [],
+        "robustness": "medium",
+        "reasoning": "CSS selector captured during discovery"
+      },
+      "url": null,
+      "value": "12345",
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Enter member ID 12345 into the member number field"
+    },
+    {
+      "id": "step-002-click",
+      "kind": "click",
+      "selector": "button.cta",
+      "target": {
+        "strategy": "css",
+        "primary": "button.cta",
+        "fallbacks": [],
+        "robustness": "medium",
+        "reasoning": "CSS selector captured during discovery"
+      },
+      "url": null,
+      "value": null,
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Click the Reveal balance button to fetch the member's balance"
+    },
+    {
+      "id": "step-003-waitFor",
+      "kind": "waitFor",
+      "selector": "[data-role=\"balance-text\"]",
+      "target": {
+        "strategy": "css",
+        "primary": "[data-role=\"balance-text\"]",
+        "fallbacks": [],
+        "robustness": "medium",
+        "reasoning": "CSS selector captured during discovery"
+      },
+      "url": null,
+      "value": null,
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Wait for the balance result to appear"
+    },
+    {
+      "id": "step-004-extractText",
+      "kind": "extractText",
+      "selector": "[data-role=\"balance-text\"]",
+      "target": {
+        "strategy": "css",
+        "primary": "[data-role=\"balance-text\"]",
+        "fallbacks": [],
+        "robustness": "medium",
+        "reasoning": "CSS selector captured during discovery"
+      },
+      "url": null,
+      "value": null,
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": "balance",
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": true,
+      "continueOnError": false,
+      "description": "Extract the balance text"
+    },
+    {
+      "id": "step-005-screenshot",
+      "kind": "screenshot",
+      "selector": null,
+      "target": null,
+      "url": null,
+      "value": null,
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": true,
+      "continueOnError": false,
+      "description": "Save a screenshot of the result"
+    }
+  ]
+}

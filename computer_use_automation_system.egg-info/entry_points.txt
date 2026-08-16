@@ -1,0 +1,2 @@
+[console_scripts]
+cuas = computer_use_automation_system.cli:main

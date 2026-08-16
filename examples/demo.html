@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Member Search Demo</title>
+    <style>
+      body { font-family: sans-serif; margin: 2rem; }
+      .card { max-width: 480px; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+      label, input, button { display: block; margin-top: 0.75rem; width: 100%; }
+      #result { margin-top: 1rem; padding: 1rem; background: #f7f7f7; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Member Balance Search</h1>
+      <label for="member-id">Member ID</label>
+      <input id="member-id" type="text" />
+      <button id="search-btn">Search</button>
+      <div id="result">
+        <div>Status: <span id="status">Not searched yet</span></div>
+        <div>Balance: <span id="balance">--</span></div>
+      </div>
+    </div>
+
+    <script>
+      const fakeDb = {
+        '12345': 'USD 2,500',
+        '67890': 'USD 990'
+      };
+
+      document.getElementById('search-btn').addEventListener('click', () => {
+        const memberId = document.getElementById('member-id').value.trim();
+        document.getElementById('status').textContent = 'Search completed';
+        document.getElementById('balance').textContent = fakeDb[memberId] || 'USD 0';
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,188 @@
+Metadata-Version: 2.4
+Name: computer-use-automation-system
+Version: 0.1.0
+Summary: Computer-Use Automation System with discovery, artifact emission, deterministic replay, HITL, and safety
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: playwright>=1.46.0
+Requires-Dist: pydantic>=2.8.2
+Requires-Dist: PyYAML>=6.0.2
+Requires-Dist: python-dotenv>=1.0.1
+Requires-Dist: openai>=1.40.0
+
+# Computer-Use Automation System
+
+A Python implementation of a Computer-Use Automation System that supports:
+
+- Discovery: an LLM observes the current page and decides the next UI action step by step
+- Hybrid perception: discovery can use DOM-derived structure, screenshot-based multimodal input, or both
+- Artifact Emission: after successful discovery, the executed actions are recorded as a strongly typed YAML/JSON artifact
+- Deterministic Replay: the artifact is replayed later with Playwright without calling the LLM again
+- Human-in-the-loop: risky or uncertain steps pause for human approval
+- Safety: domain restrictions, dangerous-action blocking, and sensitive-data masking
+
+## 專案結構
+- `computer_use_automation_system/`：Python 主程式
+- `artifacts/`：可重播流程產物
+- `examples/demo.html`：DOM-rich demo 頁面
+- `examples/vision_demo.html`：較偏 vision / weaker-DOM 的 demo 頁面
+
+## 環境安裝（Conda: interface）
+請先啟用你已建立好的 conda 環境：
+
+```bash
+conda activate interface
+```
+
+安裝專案依賴：
+
+```bash
+cd Computer-Use-Automation-System
+python -m pip install -e .
+python -m playwright install chromium
+```
+
+## LLM API Key 與 `.env`
+對，若你有自己的 LLM API key，建議放在專案根目錄的 `.env`。
+
+由於編輯器對 `.env` 檔名有安全限制，專案提供的是 `env.example` 範本。你可以自行複製成 `.env`：
+
+```bash
+cd Computer-Use-Automation-System
+cp env.example .env
+```
+
+然後把 `.env` 改成你的實際設定。
+
+### OpenAI-compatible 範例
+```bash
+LLM_PROVIDER=openai_compatible
+LLM_API_KEY=你的_api_key
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o-mini
+LLM_TIMEOUT_SECONDS=60
+```
+
+### Azure OpenAI 範例
+```bash
+LLM_PROVIDER=azure_openai
+LLM_API_KEY=你的_azure_openai_key
+LLM_BASE_URL=https://你的資源名稱.openai.azure.com/
+LLM_MODEL=你的deployment名稱
+LLM_TIMEOUT_SECONDS=60
+AZURE_OPENAI_API_VERSION=2024-12-01-preview
+```
+
+> 在 Azure OpenAI 中，`LLM_MODEL` 請填 deployment name，不一定是原始模型名稱。
+>
+> `.gitignore` 已忽略 `.env`，不要把真實金鑰提交到 git。
+
+## 使用方式
+
+### 1) Discovery: let the LLM drive the browser and record an artifact
+```bash
+cuas discover --task "Check the balance for member 12345" --url "https://example.com/member-search" --use-llm
+```
+
+You can also limit the maximum number of discovery steps:
+
+```bash
+cuas discover --task "Check the balance for member 12345" --url "https://example.com/member-search" --use-llm --max-steps 12
+```
+
+You can also specify an output file:
+
+```bash
+cuas discover --task "Check the balance for member 12345" --url "https://example.com/member-search" --output artifacts/member-balance.json
+```
+
+You can control screenshot usage during discovery:
+
+```bash
+cuas discover --task "Check the balance for member 12345" --url "https://example.com/member-search" --use-llm --image-mode auto
+```
+
+Available values:
+- `auto`: send screenshots only when the DOM signal is sparse or degraded
+- `always`: always send the current screenshot to the LLM as multimodal input
+- `never`: do not send screenshots; use only structured page context
+
+### 2) Replay: run the artifact deterministically without calling the LLM
+```bash
+cuas replay --artifact artifacts/sample-member-balance.json --param memberId=12345
+```
+
+To run in headless mode:
+
+```bash
+cuas replay --artifact artifacts/sample-member-balance.json --param memberId=12345 --headless
+```
+
+## 本地 demo 測試
+你可以先開一個靜態伺服器來測試 `examples/demo.html`，例如：
+
+```bash
+cd Computer-Use-Automation-System
+python -m http.server 8000
+```
+
+Then generate an artifact with:
+
+```bash
+cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/demo.html" --use-llm
+```
+
+You can also compare DOM-rich vs vision-assisted behavior:
+
+```bash
+cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/demo.html" --use-llm --image-mode never
+cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/demo.html" --use-llm --image-mode always
+```
+
+For the weaker-DOM demo:
+
+```bash
+cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/vision_demo.html" --use-llm --image-mode never
+cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/vision_demo.html" --use-llm --image-mode always
+```
+
+Then replay it with:
+
+```bash
+cuas replay --artifact artifacts/member-balance-query.json --param memberId=12345
+```
+
+## Artifact 格式特性
+每個 artifact 會包含：
+- `parameters`：輸入參數定義
+- `outputs`：輸出契約，例如 `balance`
+- `successCondition`：成功條件
+- `safety`：安全策略
+- `steps`：逐步操作清單，例如 goto / click / fill / extractText / humanApproval
+
+Discovery 會將 balance extraction 的 `outputKey` 正規化為 `balance`，避免同一結果在 artifact 中出現多個不同 key（例如 `balance_text` 與 `balance`）。
+
+## Perception strategy / write-up
+
+### DOM-rich vs vision-assisted discovery
+這個 prototype 現在支援 hybrid perception：
+- **DOM-rich path**：當頁面有足夠穩定的結構訊號時，LLM 可主要依賴 DOM-derived summary 與 generic page hints 來決策。
+- **Vision-assisted path**：當 DOM 訊號較弱、較稀疏，或你強制使用 `--image-mode always` 時，系統會把當前 screenshot 真的以 multimodal image input 傳給 LLM，而不只是傳遞 screenshot path 字串。
+
+### Screenshot policy
+- `--image-mode auto`：預設策略。DOM 訊號足夠時不一定送圖；DOM 稀疏、實驗模式或 observation degraded 時送圖。
+- `--image-mode always`：每一步都送 screenshot，適合驗證視覺感知能力。
+- `--image-mode never`：不送 screenshot，適合做 ablation / 對照實驗。
+
+### Current findings from the demos
+- 在 `examples/demo.html` 這種 DOM-rich surface 上，vision 不是必要條件，因為 DOM summary 與 generic hints 已足以完成 discovery。
+- 在 `examples/vision_demo.html` 這種較弱 DOM surface 上，vision 雖然不是唯一成功條件，但能讓模型更早判斷畫面已完成、減少多餘步驟，讓 artifact 更乾淨。
+- 這表示目前架構不是純 DOM bot，而是逐步走向 DOM + screenshot 的 hybrid computer-use agent。
+
+## 目前限制
+目前 replay 仍主要依賴 recorded selectors / targets 來執行，因此這版仍以 web surface 為主，尚未實作 desktop adapter、OCR adapter 或真正的 cross-surface action layer。這版已滿足：LLM 探索一次、錄製 artifact、後續 deterministic replay、以及 HITL / safety 骨架。
+
+若你使用 Azure OpenAI，程式目前改走 `chat.completions.create(...)`，通常比 `responses.create(...)` 更穩定。你仍需確認：
+- endpoint 正確
+- deployment name 正確
+- API version 與你的 Azure 資源相容

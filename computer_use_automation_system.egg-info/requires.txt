@@ -1,0 +1,5 @@
+playwright>=1.46.0
+pydantic>=2.8.2
+PyYAML>=6.0.2
+python-dotenv>=1.0.1
+openai>=1.40.0

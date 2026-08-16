@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "computer-use-automation-system"
+version = "0.1.0"
+description = "Computer-Use Automation System with discovery, artifact emission, deterministic replay, HITL, and safety"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "playwright>=1.46.0",
+  "pydantic>=2.8.2",
+  "PyYAML>=6.0.2",
+  "python-dotenv>=1.0.1",
+  "openai>=1.40.0",
+]
+
+[project.scripts]
+cuas = "computer_use_automation_system.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+include = ["computer_use_automation_system*"]
