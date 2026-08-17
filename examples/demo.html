@@ -31,8 +31,14 @@
 
       document.getElementById('search-btn').addEventListener('click', () => {
         const memberId = document.getElementById('member-id').value.trim();
-        document.getElementById('status').textContent = 'Search completed';
-        document.getElementById('balance').textContent = fakeDb[memberId] || 'USD 0';
+        const balance = fakeDb[memberId];
+        if (balance) {
+          document.getElementById('status').textContent = 'Search completed';
+          document.getElementById('balance').textContent = balance;
+          return;
+        }
+        document.getElementById('status').textContent = 'Member not found';
+        document.getElementById('balance').textContent = 'Member not found';
       });
     </script>
   </body>

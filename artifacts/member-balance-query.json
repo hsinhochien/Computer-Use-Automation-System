@@ -2,9 +2,9 @@
   "version": "1.0",
   "artifactId": "member-balance-query",
   "name": "Member Balance Query",
-  "description": "LLM-driven discovered workflow | thoughts: The member ID field is empty and the balance has not been searched yet, so the next step is to enter the provided member ID into the input field. | The member ID is already filled and the balance is not yet available, so the next step is to click the Search button. | The balance result is already visible and meaningful, so the task is complete.",
+  "description": "LLM-driven discovered workflow | thoughts: The member ID field is empty and the balance has not been searched yet, so the next safe step is to enter member ID 66 into the input. | The member ID is already filled and the balance is not yet available, so the next safe step is to click the Search button. | The member ID is already filled and Search was already clicked. The page shows a meaningful balance/status result, so the next safe step is to extract the balance text. | The member ID is already filled and search/extract were already attempted. The visible result still shows a meaningful final state: balance is 'Member not found'. The task is complete with the available result.",
   "taskTemplate": "Check the balance for member {{memberId}}",
-  "createdAt": "2026-08-17T22:48:55.541946Z",
+  "createdAt": "2026-08-17T23:07:45.291572Z",
   "startUrl": "http://localhost:8000/examples/demo.html",
   "parameters": [
     {
@@ -55,7 +55,7 @@
         "reasoning": "Stable CSS ID selector captured during discovery"
       },
       "url": null,
-      "value": "12345",
+      "value": "66",
       "key": null,
       "timeoutMs": null,
       "outputKey": null,
@@ -63,7 +63,7 @@
       "risk": "low",
       "sensitive": false,
       "continueOnError": false,
-      "description": "Enter member ID 12345 into the member ID input field"
+      "description": "Enter member ID 66 into the member ID input field."
     },
     {
       "id": "step-002-click",
@@ -85,10 +85,32 @@
       "risk": "low",
       "sensitive": false,
       "continueOnError": false,
-      "description": "Click the Search button to look up the balance for member 12345"
+      "description": "Click the Search button to look up the balance for member 66."
     },
     {
-      "id": "step-003-waitFor",
+      "id": "step-003-extractText",
+      "kind": "extractText",
+      "selector": "#balance",
+      "target": {
+        "strategy": "css",
+        "primary": "#balance",
+        "fallbacks": [],
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
+      },
+      "url": null,
+      "value": null,
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": "balance",
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Extract the displayed balance text from the balance result field."
+    },
+    {
+      "id": "step-004-waitFor",
       "kind": "waitFor",
       "selector": "#balance",
       "target": {
@@ -108,28 +130,6 @@
       "sensitive": false,
       "continueOnError": false,
       "description": "Wait for the balance result to appear"
-    },
-    {
-      "id": "step-004-extractText",
-      "kind": "extractText",
-      "selector": "#balance",
-      "target": {
-        "strategy": "css",
-        "primary": "#balance",
-        "fallbacks": [],
-        "robustness": "high",
-        "reasoning": "Stable CSS ID selector captured during discovery"
-      },
-      "url": null,
-      "value": null,
-      "key": null,
-      "timeoutMs": null,
-      "outputKey": "balance",
-      "expectedText": null,
-      "risk": "low",
-      "sensitive": true,
-      "continueOnError": false,
-      "description": "Extract the balance text"
     },
     {
       "id": "step-005-screenshot",

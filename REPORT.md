@@ -71,8 +71,10 @@ This currently works best for:
 - selects → `selectOption`
 - some toggles → simplified `click`
 
+In addition, some human-edited fields are promoted into active runtime intent. For example, if the operator changes the member ID during handoff, discovery updates the live `memberId` parameter and treats that override as the latest intended runtime value for subsequent planning.
+
 **Trade-off:**
-- Advantage: this satisfies the assignment's requirement to record what the human did in a minimal but real way, and lets replay reproduce common manual edits.
+- Advantage: this satisfies the assignment's requirement to record what the human did in a minimal but real way, lets replay reproduce common manual edits, and prevents resumed automation from reverting key operator overrides.
 - Cost: this is not a full event-level recorder, so richer button sequences and transient interaction traces are not captured exactly.
 
 ---
@@ -179,6 +181,8 @@ Replay checks an artifact-defined success condition rather than relying only on 
 #### D. Parameter contract
 Replay parameters are passed explicitly through `--param key=value`, which keeps runtime input substitution controlled and inspectable.
 
+During discovery, the runtime parameter contract can also be updated by human handoff for selected fields. In the current prototype, a human override of the member ID is treated as a legitimate update to runtime intent rather than a mistaken page edit.
+
 ### Runtime errors and exceptional states
 
 The system currently handles runtime failures in a practical but still prototype-oriented way.
@@ -188,6 +192,8 @@ If a selector is missing, a click fails, a text assertion fails, or a timeout oc
 
 #### B. Business result validation
 Replay distinguishes between “the steps executed” and “the workflow actually succeeded” by evaluating `successCondition` after step execution.
+
+The replay path also models at least one explicit business outcome separate from execution failure: an invalid or unknown member ID is surfaced as `businessOutcomeCode="member_not_found"` rather than being treated as a crash.
 
 #### C. Continue-on-error support
 The schema includes `continueOnError`, which allows some steps to be marked as non-fatal. This provides a limited form of recovery policy.
@@ -226,10 +232,26 @@ What is still missing:
 
 So the system has some drift resistance, but it is not yet a full drift-tolerant replay engine.
 
+### Error taxonomy and cut lines
+The intended runtime result contract is explicitly split into three classes:
+
+1. **Business outcomes**: the automation ran correctly and the caller needs a meaningful domain result.
+   - Current implemented example: `member_not_found`.
+   - In a richer system this category would also include outcomes such as access denied by business policy, no matching policy record, or ambiguous member match.
+
+2. **Recoverable conditions**: the automation hit a known transient or bounded problem that can be retried, dismissed, or worked around without changing the business meaning of the task.
+   - Current support is minimal and mostly represented through `continueOnError` and conservative waits.
+   - In a fuller system this category would include known interstitials, transient loading failures, or a retryable session-refresh step.
+
+3. **Hard failures**: the run cannot proceed safely or deterministically.
+   - Examples include missing selectors for required controls, assertion failures, unexpected UI states with no safe handler, or browser/runtime exceptions.
+
+The current prototype deliberately implements only a thin slice of this taxonomy in code. The cut line is intentional: correctness of deterministic replay and explicit business-outcome separation were prioritized over a large recovery ruleset.
+
 ### Error-handling trade-offs
 - The replay path is deterministic and simple to debug.
 - The system has a clear success contract and output contract.
-- Error handling is still narrower than a production-grade automation system because the runtime taxonomy is not yet rich enough (for example, no explicit member-not-found or session-expired business outcome model).
+- Error handling is still narrower than a production-grade automation system because the runtime taxonomy is not yet rich enough beyond the currently modeled outcomes (for example, session-expired, access-denied, or multi-cause business failures are not yet modeled explicitly).
 
 ### Summary
 The current design prioritizes:
@@ -238,3 +260,76 @@ The current design prioritizes:
 - and a clean separation between adaptive discovery and fixed execution.
 
 The main trade-off is that robustness still depends heavily on selector quality and on task-shaped observation heuristics established during discovery.
+
+---
+
+## 4. Design for heterogeneity and scale
+
+This section addresses the assignment's broader environment requirements. These extensions are not fully implemented in code, but the current abstractions were chosen so the prototype does not paint itself into a corner.
+
+### A. Surface abstraction seam
+The most important seam in the current design is the separation between:
+- **surface-specific perception and actuation**, and
+- **surface-agnostic workflow intent recorded in the artifact**.
+
+Today, the concrete surface adapter is a Playwright/web implementation. It provides:
+- observation (`_page_context`, screenshots, form-state snapshots),
+- actuation (`click`, `fill`, `selectOption`, `press`, `waitFor`),
+- and evidence capture.
+
+The artifact, however, is intentionally more abstract than raw browser calls. A step records:
+- a typed action kind,
+- a target spec,
+- parameterized values,
+- output extraction intent,
+- and a success condition.
+
+That means the artifact schema can remain mostly stable even if the surface adapter changes. A legacy web adapter could rely more heavily on screenshots or accessibility metadata; a desktop adapter could map `target.strategy` to OCR regions, accessibility-tree nodes, image anchors, or native automation handles. In that future design, the adapter is responsible for grounding `TargetSpec` onto a concrete surface, while replay remains responsible for executing the already-recorded workflow contract.
+
+### B. How this would extend beyond clean DOM surfaces
+The current prototype already hints at this extension path through multimodal discovery:
+- DOM-derived context is preferred when reliable,
+- screenshots can be promoted when DOM quality is weak,
+- and replay remains selector-driven only because the current demo surface is stable.
+
+For a desktop or degraded web environment, the architecture would evolve by introducing multiple target strategies under the same artifact schema, for example:
+- `css`
+- `accessibility`
+- `text_anchor`
+- `image_anchor`
+- `screen_region`
+
+The key design choice is that the artifact should record *what control or result region is intended*, while the surface adapter determines *how to ground it* on a specific platform.
+
+### C. Multi-tenant artifact reuse
+The intended reuse model is not "record one artifact per tenant forever." Instead, the base unit should be a **vendor-product-level capability artifact** that can be parameterized and then specialized safely.
+
+A practical layered model would be:
+1. **Base artifact**: common workflow for a shared vendor product and version family.
+2. **Tenant overlay**: tenant-specific selector overrides, routes, labels, policy limits, or alternate checkpoints.
+3. **Runtime parameters**: invocation-time values such as `memberId`.
+
+In that model, most tenants running the same underlying product would reuse the same base artifact. Only the overlay would change when a tenant has custom branding, an extra interstitial, or a slightly different route structure.
+
+### D. Drift detection and management
+The current prototype does not implement a full drift-management system, but the intended approach is:
+- detect replay-time mismatches at the target/checkpoint level,
+- classify whether the failure looks like transient runtime state or structural UI drift,
+- and escalate either to recovery policy, human handoff, or artifact review.
+
+A stronger future system would store lightweight signatures alongside targets, such as:
+- expected nearby text,
+- control role/type,
+- container identity,
+- version tags,
+- or alternative fallbacks.
+
+A tenant overlay could then be updated without re-recording the entire capability. This is the core reason the schema keeps target metadata and leaves room for fallback strategies.
+
+### E. Why this is enough for the prototype
+The assignment does not require implementing multi-tenant infrastructure or desktop automation. What it does require is a believable seam between the flow contract and the surface-specific adapter. The current design meets that bar because:
+- discovery and replay are already separated,
+- the artifact is typed and reviewable,
+- target metadata is explicitly represented,
+- multimodal perception is already part of discovery,
+- and the current write-up makes clear where adapter-specific logic would live in a broader system.

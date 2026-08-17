@@ -204,6 +204,18 @@ def replay_artifact(options: ReplayOptions) -> ReplayResult:
                     evidence=evidence,
                 )
 
+            if observed in {"Member not found", "No record found"}:
+                return ReplayResult(
+                    status="business_outcome",
+                    artifactId=artifact.artifactId,
+                    outputs=declared_outputs,
+                    businessOutcomeCode="member_not_found",
+                    message="Replay completed but the requested member record was not found.",
+                    expected=expected,
+                    observed=guard.redact_text(observed, sensitive=True),
+                    evidence=evidence,
+                )
+
             if observed in {"", "--", "USD 0"}:
                 return ReplayResult(
                     status="business_outcome",

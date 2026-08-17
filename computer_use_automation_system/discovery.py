@@ -449,6 +449,29 @@ def _pause_for_human_intervention(page: Page, logger: Logger, reason: str) -> tu
         page.wait_for_timeout(250)
 
 
+def _is_member_field_selector(selector: str | None) -> bool:
+    if not selector:
+        return False
+    selector_text = selector.lower()
+    return "member" in selector_text and ("id" in selector_text or "number" in selector_text)
+
+
+def _apply_runtime_parameter_enforcement(action: DiscoveryAction, parameters: dict[str, str], logger: Logger) -> DiscoveryAction:
+    if action.kind == "fill" and _is_member_field_selector(action.selector) and parameters.get("memberId"):
+        expected_member_id = parameters["memberId"]
+        if action.value != expected_member_id:
+            logger.warn(
+                "Discovery action value rewritten to match runtime parameter override",
+                {
+                    "selector": action.selector,
+                    "originalValue": action.value,
+                    "rewrittenValue": expected_member_id,
+                },
+            )
+            action = action.model_copy(update={"value": expected_member_id})
+    return action
+
+
 def _execute_discovery_action(page: Page, action: DiscoveryAction, parameters: dict[str, str], logger: Logger) -> None:
     if action.kind == "goto":
         url = _interpolate(action.url, parameters)
@@ -547,6 +570,44 @@ def _has_step(steps: list[Step], kind: str, selector: str | None = None, output_
         and (output_key is None or step.outputKey == output_key)
         for step in steps
     )
+
+
+def _extract_runtime_parameter_overrides(
+    before_state: list[dict[str, str | bool | None]],
+    after_state: list[dict[str, str | bool | None]],
+) -> dict[str, str]:
+    before_by_selector = {
+        str(item.get("selector")): item
+        for item in before_state
+        if item.get("selector")
+    }
+    overrides: dict[str, str] = {}
+
+    for after in after_state:
+        selector = str(after.get("selector") or "")
+        if not selector:
+            continue
+        before = before_by_selector.get(selector)
+        if not before:
+            continue
+        tag = str(after.get("tag") or "")
+        if tag not in {"input", "textarea"}:
+            continue
+        before_value = str(before.get("value") or "")
+        after_value = str(after.get("value") or "")
+        if before_value == after_value:
+            continue
+        selector_text = " ".join(
+            [
+                selector.lower(),
+                str(after.get("ariaLabel") or "").lower(),
+                str(after.get("name") or "").lower(),
+            ]
+        )
+        if "member" in selector_text and ("id" in selector_text or "number" in selector_text):
+            overrides["memberId"] = after_value
+
+    return overrides
 
 
 def _build_human_steps_from_state_diff(
@@ -718,6 +779,7 @@ def discover_task_to_artifact(
 
     client = LLMClient()
     thoughts: list[str] = []
+    human_override_context: dict[str, str] = {}
 
     artifact = Artifact(
         artifactId="member-balance-query",
@@ -788,7 +850,13 @@ def discover_task_to_artifact(
                 )
                 if context["hints"]["balance_ready"]:
                     logger.info("Discovery heuristic", {"step": index, "message": "Balance appears ready; prefer extraction or completion."})
-                decision = client.decide_next_action(task=task, page_context=context, steps=artifact.steps, image_mode=image_mode)
+                decision = client.decide_next_action(
+                    task=task,
+                    page_context=context,
+                    steps=artifact.steps,
+                    image_mode=image_mode,
+                    human_override_context=human_override_context,
+                )
                 thoughts.append(decision.thought)
                 redacted_thought = guard.redact_known_values(
                     decision.thought,
@@ -798,6 +866,11 @@ def discover_task_to_artifact(
 
                 if _consume_manual_pause_request(page):
                     human_notes, before_state, after_state = _pause_for_human_intervention(page, logger, "Manual pause requested by the operator.")
+                    parameter_overrides = _extract_runtime_parameter_overrides(before_state, after_state)
+                    if parameter_overrides:
+                        parameters.update(parameter_overrides)
+                        human_override_context.update(parameter_overrides)
+                        logger.info("Discovery updated runtime parameters from human intervention", {"overrides": parameter_overrides})
                     human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1)
                     if human_steps:
                         artifact.steps.extend(human_steps)
@@ -807,12 +880,19 @@ def discover_task_to_artifact(
 
                 if decision.action.risk == "high":
                     human_notes, before_state, after_state = _pause_for_human_intervention(page, logger, decision.action.description or "High-risk action requires human intervention.")
+                    parameter_overrides = _extract_runtime_parameter_overrides(before_state, after_state)
+                    if parameter_overrides:
+                        parameters.update(parameter_overrides)
+                        human_override_context.update(parameter_overrides)
+                        logger.info("Discovery updated runtime parameters from human intervention", {"overrides": parameter_overrides})
                     human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1)
                     if human_steps:
                         artifact.steps.extend(human_steps)
                         logger.info("Discovery recorded human intervention steps", {"count": len(human_steps), "step_ids": [step.id for step in human_steps]})
                     logger.info("Discovery pending action discarded after human intervention", {"step": index, "kind": decision.action.kind, "selector": decision.action.selector, "notes": human_notes})
                     continue
+
+                decision.action = _apply_runtime_parameter_enforcement(decision.action, parameters, logger)
 
                 if decision.action.kind == "done":
                     break
@@ -834,6 +914,11 @@ def discover_task_to_artifact(
                         logger.info("Discovery heuristic override", {"step": index, "action": decision.action.model_dump()})
                     else:
                         human_notes, before_state, after_state = _pause_for_human_intervention(page, logger, "The agent appears stuck repeating the same action.")
+                        parameter_overrides = _extract_runtime_parameter_overrides(before_state, after_state)
+                        if parameter_overrides:
+                            parameters.update(parameter_overrides)
+                            human_override_context.update(parameter_overrides)
+                            logger.info("Discovery updated runtime parameters from human intervention", {"overrides": parameter_overrides})
                         human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1)
                         if human_steps:
                             artifact.steps.extend(human_steps)

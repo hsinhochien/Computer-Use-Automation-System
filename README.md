@@ -176,7 +176,8 @@ Current behavior during human handoff:
 - the pending automation action is discarded after resume,
 - discovery re-observes the updated page state,
 - replayable human-applied form changes are captured into the artifact as steps,
-- and discovery continues from the updated same-session state.
+- human overrides to key runtime fields such as the member ID are promoted into the active discovery parameters,
+- and discovery continues from the updated same-session state without reverting the operator's latest intended value.
 
 ## 7. Current scope and limitations
 
@@ -184,7 +185,9 @@ Current behavior during human handoff:
 - The included generic observation logic is broader than a single hard-coded page, but it is still shaped by the current balance-query demo family.
 - The current prototype supports a real same-session **human-triggered** handoff during discovery through an in-browser control panel.
 - Human-applied changes are captured in a **v1** form-state-diff mechanism and converted into replayable artifact steps for common controls such as text inputs, textareas, selects, and some toggles.
+- Human overrides to key runtime fields such as `memberId` can update the active discovery parameters, so resumed automation continues from the operator's latest intended value rather than blindly reverting to the original task literal.
 - Agent-triggered escalation is only partially implemented at the moment. Basic triggers include `humanApproval`, high-risk actions, and repeated-action stuck detection.
 - Replay depends on the recorded selectors and result region captured during discovery.
 - The implementation includes screenshot-based multimodal discovery, but replay itself remains deterministic and selector-driven.
+- Invalid member IDs are modeled as a business outcome (`member_not_found`) instead of a system crash.
 - Human action capture is not yet a full low-level event recorder; button-click inference and richer operator action capture remain future work.

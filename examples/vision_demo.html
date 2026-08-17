@@ -46,8 +46,14 @@
 
       button.addEventListener('click', () => {
         const memberId = input.value.trim();
-        statusText.textContent = 'Search completed';
-        balanceText.textContent = fakeDb[memberId] || 'USD 0';
+        const balance = fakeDb[memberId];
+        if (balance) {
+          statusText.textContent = 'Search completed';
+          balanceText.textContent = balance;
+          return;
+        }
+        statusText.textContent = 'Member not found';
+        balanceText.textContent = 'Member not found';
       });
     </script>
   </body>

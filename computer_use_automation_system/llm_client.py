@@ -50,6 +50,7 @@ class LLMClient:
         page_context: dict,
         action_history: list[dict[str, str | None]],
         image_mode: str,
+        human_override_context: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         system_prompt = (
             "You are controlling a browser to complete a user task. "
@@ -62,12 +63,16 @@ class LLMClient:
             "If the task is complete, return action.kind='done'. "
             "If the target is a dropdown or <select> element, use action.kind='selectOption' instead of fill. "
             "If a step is risky or uncertain, return action.kind='humanApproval'. "
+            "If human override context is present, it supersedes conflicting runtime values inferred from the original task. "
+            "Treat a human-updated runtime field as intentionally updated, not incorrect. "
+            "Do not revert a field changed by the human operator back to the original task value unless the operator explicitly asked for that reversal. "
             "Do not reveal secrets."
         )
         user_prompt = (
             f"Task: {task}\n"
             f"Page context: {json.dumps(page_context, ensure_ascii=False)}\n"
-            f"Action history: {json.dumps(action_history, ensure_ascii=False)}\n\n"
+            f"Action history: {json.dumps(action_history, ensure_ascii=False)}\n"
+            f"Human override context: {json.dumps(human_override_context or {}, ensure_ascii=False)}\n\n"
             "Return JSON with this exact shape:\n"
             '{"thought":"...","action":{"kind":"click|fill|selectOption|waitFor|extractText|assertText|goto|press|humanApproval|screenshot|done",'
             '"selector":null,"url":null,"value":null,"key":null,"outputKey":null,"expectedText":null,'
@@ -93,7 +98,14 @@ class LLMClient:
             {"role": "user", "content": user_prompt},
         ]
 
-    def decide_next_action(self, task: str, page_context: dict, steps: list[Step], image_mode: str = "auto") -> DiscoveryDecision:
+    def decide_next_action(
+        self,
+        task: str,
+        page_context: dict,
+        steps: list[Step],
+        image_mode: str = "auto",
+        human_override_context: dict[str, str] | None = None,
+    ) -> DiscoveryDecision:
         action_history = [
             {
                 "kind": step.kind,
@@ -103,7 +115,7 @@ class LLMClient:
             }
             for step in steps[-6:]
         ]
-        messages = self._build_messages(task, page_context, action_history, image_mode)
+        messages = self._build_messages(task, page_context, action_history, image_mode, human_override_context)
         try:
             response = self.client.chat.completions.create(
                 model=self.settings.model,

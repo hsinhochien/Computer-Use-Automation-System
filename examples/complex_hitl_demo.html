@@ -145,10 +145,16 @@
           statusText.textContent = 'Blocked: case note required';
           return;
         }
-        statusText.textContent = 'Review completed';
+        const balance = fakeDb[memberNumber.value.trim()];
         regionText.textContent = regionSelect.options[regionSelect.selectedIndex].text;
         modeText.textContent = lookupMode.options[lookupMode.selectedIndex].text;
-        balanceText.textContent = fakeDb[memberNumber.value.trim()] || 'USD 0';
+        if (balance) {
+          statusText.textContent = 'Review completed';
+          balanceText.textContent = balance;
+          return;
+        }
+        statusText.textContent = 'Member not found';
+        balanceText.textContent = 'Member not found';
       });
 
       resetBtn.addEventListener('click', () => {

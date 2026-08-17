@@ -2,9 +2,9 @@
   "version": "1.0",
   "artifactId": "member-balance-query",
   "name": "Member Balance Query",
-  "description": "LLM-driven discovered workflow | thoughts: Start by selecting the required region from the dropdown. | Region is already set to North America. Next set the lookup mode to Member ID using the dropdown. | Region and lookup mode are already set. Next fill the member number before other required fields and submission. | Member ID is already filled. The next required field from the task is agent code before reviewing. | The remaining required field is the case note before reviewing the balance. Fill it with a concise reason. | All required fields appear filled, including member ID, region, lookup mode, agent code, and a case note. The next safe step is to submit the review request to reveal the balance. | The balance result is already visible and meaningful, so the task is complete without further interaction.",
+  "description": "LLM-driven discovered workflow | thoughts: Start by selecting the required region from the dropdown. | Region is already set to North America, so the next required step is to set the lookup mode to Member ID using the dropdown. | Region and lookup mode are already set. Next fill the member number before the remaining fields and review action. | Region, lookup mode, and member ID are already set. The next required field is agent code before adding the case note and reviewing. | The human override changed the member ID to 66, so I should not revert it. Region and lookup mode are already set. The next required field to complete the review flow is agent code before adding the case note and reviewing. | The human override changed the member ID to 66, so I should keep that value. Region, lookup mode, and agent code are already set. The next required field is the case note before reviewing the balance. | The human override changed the member ID to 66 and all required fields are filled. Per guidance, do not revert the human-updated value; the next safe step is to click the review/search button. | The human override changed the member ID to 66, and the current result is already visible and meaningful: balance/status show 'Member not found' for North America and Member ID mode. The task is complete, so finish without changing the human-updated field.",
   "taskTemplate": "Check the balance for member {{memberId}}",
-  "createdAt": "2026-08-17T22:40:09.257637Z",
+  "createdAt": "2026-08-17T23:10:22.505141Z",
   "startUrl": "http://localhost:8000/examples/complex_hitl_demo.html",
   "parameters": [
     {
@@ -112,6 +112,28 @@
     {
       "id": "step-004-fill",
       "kind": "fill",
+      "selector": "#member-number",
+      "target": {
+        "strategy": "css",
+        "primary": "#member-number",
+        "fallbacks": [],
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
+      },
+      "url": null,
+      "value": "66",
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Human takeover: filled a field during manual intervention"
+    },
+    {
+      "id": "step-005-fill",
+      "kind": "fill",
       "selector": "#agent-code",
       "target": {
         "strategy": "css",
@@ -129,10 +151,10 @@
       "risk": "low",
       "sensitive": false,
       "continueOnError": false,
-      "description": "Enter the agent code AGENT-77"
+      "description": "Fill the agent code field with AGENT-77"
     },
     {
-      "id": "step-005-fill",
+      "id": "step-006-fill",
       "kind": "fill",
       "selector": "#case-note",
       "target": {
@@ -143,7 +165,7 @@
         "reasoning": "Stable CSS ID selector captured during discovery"
       },
       "url": null,
-      "value": "啊噠噠",
+      "value": "Reviewing member balance",
       "key": null,
       "timeoutMs": null,
       "outputKey": null,
@@ -151,10 +173,10 @@
       "risk": "low",
       "sensitive": false,
       "continueOnError": false,
-      "description": "Human takeover: filled a field during manual intervention"
+      "description": "Fill the case note field"
     },
     {
-      "id": "step-006-click",
+      "id": "step-007-click",
       "kind": "click",
       "selector": "#review-btn",
       "target": {
@@ -173,10 +195,10 @@
       "risk": "low",
       "sensitive": false,
       "continueOnError": false,
-      "description": "Click the Review balance button to retrieve the member balance"
+      "description": "Click Review balance to retrieve the balance for the currently filled member ID"
     },
     {
-      "id": "step-007-waitFor",
+      "id": "step-008-waitFor",
       "kind": "waitFor",
       "selector": "[data-role=\"balance-text\"]",
       "target": {
@@ -198,7 +220,7 @@
       "description": "Wait for the balance result to appear"
     },
     {
-      "id": "step-008-extractText",
+      "id": "step-009-extractText",
       "kind": "extractText",
       "selector": "[data-role=\"balance-text\"]",
       "target": {
@@ -220,7 +242,7 @@
       "description": "Extract the balance text"
     },
     {
-      "id": "step-009-screenshot",
+      "id": "step-010-screenshot",
       "kind": "screenshot",
       "selector": null,
       "target": null,
