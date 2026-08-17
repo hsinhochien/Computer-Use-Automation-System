@@ -414,8 +414,13 @@ def _hide_pause_overlay(page: Page) -> None:
     )
 
 
-def _pause_for_human_intervention(page: Page, logger: Logger, reason: str) -> tuple[list[str], list[dict[str, str | bool | None]], list[dict[str, str | bool | None]]]:
+def _pause_for_human_intervention(
+    page: Page,
+    logger: Logger,
+    reason: str,
+) -> tuple[list[str], list[dict[str, str | bool | None]], list[dict[str, str | bool | None]], dict, dict]:
     before_state = _capture_form_state(page)
+    before_context = _page_context(page, screenshot_path="handoff-before")
     _show_pause_overlay(page, reason)
     logger.warn("Discovery paused for human intervention", {"reason": reason})
     print("Discovery is paused for human intervention.")
@@ -443,9 +448,10 @@ def _pause_for_human_intervention(page: Page, logger: Logger, reason: str) -> tu
             raise RuntimeError("Discovery aborted during human intervention")
         if state.get("resumeRequested"):
             after_state = _capture_form_state(page)
+            after_context = _page_context(page, screenshot_path="handoff-after")
             _hide_pause_overlay(page)
             logger.info("Discovery resumed after human intervention", {"reason": reason, "notes": list(seen_notes)})
-            return list(seen_notes), before_state, after_state
+            return list(seen_notes), before_state, after_state, before_context, after_context
         page.wait_for_timeout(250)
 
 
@@ -614,6 +620,8 @@ def _build_human_steps_from_state_diff(
     before_state: list[dict[str, str | bool | None]],
     after_state: list[dict[str, str | bool | None]],
     starting_index: int,
+    before_context: dict | None = None,
+    after_context: dict | None = None,
 ) -> list[Step]:
     before_by_selector = {
         str(item.get("selector")): item
@@ -686,6 +694,25 @@ def _build_human_steps_from_state_diff(
                 )
             )
             next_index += 1
+
+    if before_context and after_context:
+        before_ready = bool(before_context.get("hints", {}).get("balance_ready"))
+        after_ready = bool(after_context.get("hints", {}).get("balance_ready"))
+        if not before_ready and after_ready:
+            click_selector = "#review-btn"
+            if not any(step.kind == "click" and step.selector == click_selector for step in steps):
+                steps.append(
+                    Step(
+                        id=f"step-{next_index:03d}-click",
+                        kind="click",
+                        selector=click_selector,
+                        target=_build_target_spec(click_selector),
+                        description="Human takeover: triggered the primary review action during manual intervention",
+                        risk="low",
+                        sensitive=False,
+                        continueOnError=False,
+                    )
+                )
 
     return steps
 
@@ -865,13 +892,13 @@ def discover_task_to_artifact(
                 logger.info("LLM decision", {"step": index, "thought": redacted_thought, "action": decision.action.model_dump()})
 
                 if _consume_manual_pause_request(page):
-                    human_notes, before_state, after_state = _pause_for_human_intervention(page, logger, "Manual pause requested by the operator.")
+                    human_notes, before_state, after_state, before_context, after_context = _pause_for_human_intervention(page, logger, "Manual pause requested by the operator.")
                     parameter_overrides = _extract_runtime_parameter_overrides(before_state, after_state)
                     if parameter_overrides:
                         parameters.update(parameter_overrides)
                         human_override_context.update(parameter_overrides)
                         logger.info("Discovery updated runtime parameters from human intervention", {"overrides": parameter_overrides})
-                    human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1)
+                    human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1, before_context, after_context)
                     if human_steps:
                         artifact.steps.extend(human_steps)
                         logger.info("Discovery recorded human intervention steps", {"count": len(human_steps), "step_ids": [step.id for step in human_steps]})
@@ -879,13 +906,13 @@ def discover_task_to_artifact(
                     continue
 
                 if decision.action.risk == "high":
-                    human_notes, before_state, after_state = _pause_for_human_intervention(page, logger, decision.action.description or "High-risk action requires human intervention.")
+                    human_notes, before_state, after_state, before_context, after_context = _pause_for_human_intervention(page, logger, decision.action.description or "High-risk action requires human intervention.")
                     parameter_overrides = _extract_runtime_parameter_overrides(before_state, after_state)
                     if parameter_overrides:
                         parameters.update(parameter_overrides)
                         human_override_context.update(parameter_overrides)
                         logger.info("Discovery updated runtime parameters from human intervention", {"overrides": parameter_overrides})
-                    human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1)
+                    human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1, before_context, after_context)
                     if human_steps:
                         artifact.steps.extend(human_steps)
                         logger.info("Discovery recorded human intervention steps", {"count": len(human_steps), "step_ids": [step.id for step in human_steps]})
@@ -913,13 +940,13 @@ def discover_task_to_artifact(
                         )
                         logger.info("Discovery heuristic override", {"step": index, "action": decision.action.model_dump()})
                     else:
-                        human_notes, before_state, after_state = _pause_for_human_intervention(page, logger, "The agent appears stuck repeating the same action.")
+                        human_notes, before_state, after_state, before_context, after_context = _pause_for_human_intervention(page, logger, "The agent appears stuck repeating the same action.")
                         parameter_overrides = _extract_runtime_parameter_overrides(before_state, after_state)
                         if parameter_overrides:
                             parameters.update(parameter_overrides)
                             human_override_context.update(parameter_overrides)
                             logger.info("Discovery updated runtime parameters from human intervention", {"overrides": parameter_overrides})
-                        human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1)
+                        human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1, before_context, after_context)
                         if human_steps:
                             artifact.steps.extend(human_steps)
                             logger.info("Discovery recorded human intervention steps", {"count": len(human_steps), "step_ids": [step.id for step in human_steps]})
