@@ -12,6 +12,134 @@ from .models import Artifact, DiscoveryAction, OutputSpec, ParameterSpec, Sensit
 from .safety import SafetyGuard
 
 
+_DISCOVERY_PAUSE_REQUESTED = False
+_PAUSE_REQUEST_FILE = Path('.cuas_pause_requested')
+
+
+def _ensure_handoff_controls(page: Page) -> None:
+    page.evaluate(
+        """
+        () => {
+          if (!window.__cuasHandoffState) {
+            window.__cuasHandoffState = {
+              requestPause: false,
+              paused: false,
+              resumeRequested: false,
+              abortRequested: false,
+              noteDraft: '',
+              submittedNotes: [],
+            };
+          }
+          const existing = document.getElementById('__cuas_handoff_controls__');
+          if (existing) return;
+          const shell = document.createElement('div');
+          shell.id = '__cuas_handoff_controls__';
+          shell.style.position = 'fixed';
+          shell.style.bottom = '16px';
+          shell.style.right = '16px';
+          shell.style.zIndex = '2147483646';
+          shell.style.background = '#eff6ff';
+          shell.style.border = '1px solid #93c5fd';
+          shell.style.borderRadius = '14px';
+          shell.style.boxShadow = '0 14px 36px rgba(0,0,0,0.14)';
+          shell.style.padding = '12px';
+          shell.style.width = '300px';
+          shell.style.maxWidth = 'calc(100vw - 32px)';
+          shell.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+          shell.innerHTML = `
+            <div style="font-size: 14px; font-weight: 700; color: #1d4ed8; margin-bottom: 8px;">Automation controls</div>
+            <div id="__cuas_controls_message__" style="font-size: 12px; color: #1e3a8a; line-height: 1.45; margin-bottom: 10px;">If you want to take over manually, click the button below. The system will pause at the next safe point.</div>
+            <button id="__cuas_request_pause_button__" type="button" style="width: 100%; border: none; border-radius: 10px; background: #2563eb; color: white; padding: 10px 12px; font-size: 13px; cursor: pointer; margin-bottom: 10px;">Request manual takeover</button>
+            <div id="__cuas_pause_actions__" style="display: none;">
+              <textarea id="__cuas_note_input__" placeholder="Optional note for the automation log" style="width: 100%; min-height: 72px; resize: vertical; box-sizing: border-box; border: 1px solid #bfdbfe; border-radius: 10px; padding: 8px; font-size: 12px; margin-bottom: 8px;"></textarea>
+              <button id="__cuas_submit_note_button__" type="button" style="width: 100%; border: 1px solid #93c5fd; border-radius: 10px; background: white; color: #1d4ed8; padding: 8px 10px; font-size: 12px; cursor: pointer; margin-bottom: 8px;">Submit note</button>
+              <div style="display: flex; gap: 8px;">
+                <button id="__cuas_resume_button__" type="button" style="flex: 1; border: none; border-radius: 10px; background: #16a34a; color: white; padding: 9px 10px; font-size: 12px; cursor: pointer;">Resume</button>
+                <button id="__cuas_abort_button__" type="button" style="flex: 1; border: none; border-radius: 10px; background: #dc2626; color: white; padding: 9px 10px; font-size: 12px; cursor: pointer;">Abort</button>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(shell);
+
+          const requestButton = document.getElementById('__cuas_request_pause_button__');
+          const resumeButton = document.getElementById('__cuas_resume_button__');
+          const abortButton = document.getElementById('__cuas_abort_button__');
+          const submitNoteButton = document.getElementById('__cuas_submit_note_button__');
+          const noteInput = document.getElementById('__cuas_note_input__');
+
+          if (requestButton) {
+            requestButton.addEventListener('click', () => {
+              window.__cuasHandoffState.requestPause = true;
+              requestButton.textContent = 'Manual takeover requested';
+              requestButton.disabled = true;
+              requestButton.style.background = '#94a3b8';
+              requestButton.style.cursor = 'default';
+            });
+          }
+          if (resumeButton) {
+            resumeButton.addEventListener('click', () => {
+              window.__cuasHandoffState.resumeRequested = true;
+            });
+          }
+          if (abortButton) {
+            abortButton.addEventListener('click', () => {
+              window.__cuasHandoffState.abortRequested = true;
+            });
+          }
+          if (submitNoteButton && noteInput) {
+            submitNoteButton.addEventListener('click', () => {
+              const value = noteInput.value.trim();
+              if (!value) return;
+              window.__cuasHandoffState.submittedNotes.push(value);
+              noteInput.value = '';
+            });
+          }
+        }
+        """
+    )
+
+
+def _consume_manual_pause_request(page: Page) -> bool:
+    global _DISCOVERY_PAUSE_REQUESTED
+    if _DISCOVERY_PAUSE_REQUESTED:
+        _DISCOVERY_PAUSE_REQUESTED = False
+        return True
+    if _PAUSE_REQUEST_FILE.exists():
+        _PAUSE_REQUEST_FILE.unlink()
+        return True
+    try:
+        requested = bool(
+            page.evaluate(
+                """
+                () => {
+                  return Boolean(window.__cuasHandoffState && window.__cuasHandoffState.requestPause);
+                }
+                """
+            )
+        )
+    except Exception:
+        requested = False
+    if requested:
+        page.evaluate(
+            """
+            () => {
+              if (window.__cuasHandoffState) {
+                window.__cuasHandoffState.requestPause = false;
+              }
+              const button = document.getElementById('__cuas_request_pause_button__');
+              if (button) {
+                button.textContent = 'Request manual takeover';
+                button.disabled = false;
+                button.style.background = '#2563eb';
+                button.style.cursor = 'pointer';
+              }
+            }
+            """
+        )
+        return True
+    return False
+
+
 def _task_to_parameters(task: str) -> dict[str, str]:
     match = re.search(r"(?:member\s*)?(\d{3,})", task, re.IGNORECASE)
     return {"memberId": match.group(1)} if match else {}
@@ -24,6 +152,56 @@ def _interpolate(value: str | None, parameters: dict[str, str]) -> str | None:
     for key, item in parameters.items():
         result = result.replace(f"{{{{{key}}}}}", item)
     return result
+
+
+def _capture_form_state(page: Page) -> list[dict[str, str | bool | None]]:
+    return page.evaluate(
+        """
+        () => {
+          const elements = Array.from(document.querySelectorAll('input, textarea, select')).slice(0, 200);
+          return elements.map((el, index) => {
+            const tag = el.tagName.toLowerCase();
+            const type = (el.getAttribute('type') || '').toLowerCase();
+            const selector = el.id
+              ? `#${el.id}`
+              : el.getAttribute('name')
+                ? `${tag}[name="${el.getAttribute('name')}"]`
+                : `${tag}:nth-of-type(${index + 1})`;
+            const base = {
+              selector,
+              tag,
+              type,
+              ariaLabel: el.getAttribute('aria-label'),
+              name: el.getAttribute('name'),
+            };
+            if (tag === 'select') {
+              const selectedIndex = el.selectedIndex;
+              const selectedOption = selectedIndex >= 0 ? el.options[selectedIndex] : null;
+              return {
+                ...base,
+                value: el.value,
+                label: selectedOption ? selectedOption.text.trim() : '',
+                checked: false,
+              };
+            }
+            if (type === 'checkbox' || type === 'radio') {
+              return {
+                ...base,
+                value: el.value,
+                label: '',
+                checked: Boolean(el.checked),
+              };
+            }
+            return {
+              ...base,
+              value: (el.value || '').trim(),
+              label: '',
+              checked: false,
+            };
+          });
+        }
+        """
+    )
 
 
 def _page_context(
@@ -152,6 +330,125 @@ def _action_to_step(index: int, action: DiscoveryAction) -> Step:
     )
 
 
+def _show_pause_overlay(page: Page, reason: str) -> None:
+    page.evaluate(
+        """
+        (reason) => {
+          const existing = document.getElementById('__cuas_pause_overlay__');
+          if (existing) existing.remove();
+          const banner = document.createElement('div');
+          banner.id = '__cuas_pause_overlay__';
+          banner.setAttribute('data-cuas-overlay', 'paused');
+          banner.style.position = 'fixed';
+          banner.style.top = '16px';
+          banner.style.right = '16px';
+          banner.style.width = '380px';
+          banner.style.maxWidth = 'calc(100vw - 32px)';
+          banner.style.zIndex = '2147483647';
+          banner.style.background = '#fff7ed';
+          banner.style.border = '1px solid #fdba74';
+          banner.style.borderRadius = '14px';
+          banner.style.boxShadow = '0 16px 40px rgba(0,0,0,0.18)';
+          banner.style.padding = '14px 16px';
+          banner.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+          banner.style.pointerEvents = 'none';
+          banner.innerHTML = `
+            <div style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: #9a3412;">Automation paused for human intervention</div>
+            <div style="font-size: 13px; color: #7c2d12; line-height: 1.45; margin-bottom: 8px;">This page is still interactive. You can operate it manually now. This is an intentional pause, not a system crash.</div>
+            <div style="font-size: 12px; color: #7c2d12; background: rgba(255,255,255,0.72); border: 1px solid #fed7aa; border-radius: 10px; padding: 8px; margin-bottom: 8px;"><strong>Reason:</strong> ${reason}</div>
+            <div style="font-size: 12px; color: #7c2d12; line-height: 1.45;">Use the controls panel to submit a note, resume automation, or abort the run.</div>
+          `;
+          document.body.appendChild(banner);
+          if (window.__cuasHandoffState) {
+            window.__cuasHandoffState.paused = true;
+            window.__cuasHandoffState.resumeRequested = false;
+            window.__cuasHandoffState.abortRequested = false;
+          }
+          const message = document.getElementById('__cuas_controls_message__');
+          const requestButton = document.getElementById('__cuas_request_pause_button__');
+          const pauseActions = document.getElementById('__cuas_pause_actions__');
+          if (message) {
+            message.textContent = 'Automation is paused. You can operate the page manually, submit a note, then resume or abort below.';
+          }
+          if (requestButton) {
+            requestButton.style.display = 'none';
+          }
+          if (pauseActions) {
+            pauseActions.style.display = 'block';
+          }
+        }
+        """,
+        reason,
+    )
+
+
+def _hide_pause_overlay(page: Page) -> None:
+    page.evaluate(
+        """
+        () => {
+          const existing = document.getElementById('__cuas_pause_overlay__');
+          if (existing) existing.remove();
+          if (window.__cuasHandoffState) {
+            window.__cuasHandoffState.paused = false;
+            window.__cuasHandoffState.resumeRequested = false;
+            window.__cuasHandoffState.abortRequested = false;
+          }
+          const message = document.getElementById('__cuas_controls_message__');
+          const requestButton = document.getElementById('__cuas_request_pause_button__');
+          const pauseActions = document.getElementById('__cuas_pause_actions__');
+          if (message) {
+            message.textContent = 'If you want to take over manually, click the button below. The system will pause at the next safe point.';
+          }
+          if (requestButton) {
+            requestButton.style.display = 'block';
+            requestButton.textContent = 'Request manual takeover';
+            requestButton.disabled = false;
+            requestButton.style.background = '#2563eb';
+            requestButton.style.cursor = 'pointer';
+          }
+          if (pauseActions) {
+            pauseActions.style.display = 'none';
+          }
+        }
+        """
+    )
+
+
+def _pause_for_human_intervention(page: Page, logger: Logger, reason: str) -> tuple[list[str], list[dict[str, str | bool | None]], list[dict[str, str | bool | None]]]:
+    before_state = _capture_form_state(page)
+    _show_pause_overlay(page, reason)
+    logger.warn("Discovery paused for human intervention", {"reason": reason})
+    print("Discovery is paused for human intervention.")
+    print("The browser page is still interactive. Use the page controls to add a note, resume, or abort.")
+    seen_notes: set[str] = set()
+    while True:
+        state = page.evaluate(
+            """
+            () => {
+              const state = window.__cuasHandoffState || {};
+              return {
+                resumeRequested: Boolean(state.resumeRequested),
+                abortRequested: Boolean(state.abortRequested),
+                submittedNotes: Array.isArray(state.submittedNotes) ? state.submittedNotes.slice() : [],
+              };
+            }
+            """
+        )
+        for note in state.get("submittedNotes", []):
+            if note not in seen_notes:
+                seen_notes.add(note)
+                logger.info("Discovery human note", {"note": note, "reason": reason})
+        if state.get("abortRequested"):
+            _hide_pause_overlay(page)
+            raise RuntimeError("Discovery aborted during human intervention")
+        if state.get("resumeRequested"):
+            after_state = _capture_form_state(page)
+            _hide_pause_overlay(page)
+            logger.info("Discovery resumed after human intervention", {"reason": reason, "notes": list(seen_notes)})
+            return list(seen_notes), before_state, after_state
+        page.wait_for_timeout(250)
+
+
 def _execute_discovery_action(page: Page, action: DiscoveryAction, parameters: dict[str, str], logger: Logger) -> None:
     if action.kind == "goto":
         url = _interpolate(action.url, parameters)
@@ -172,6 +469,17 @@ def _execute_discovery_action(page: Page, action: DiscoveryAction, parameters: d
         value = _interpolate(action.value, parameters) or ""
         page.locator(action.selector).fill(value, timeout=10000)
         logger.info("Discovery fill", {"selector": action.selector, "value": "***REDACTED***" if action.sensitive else value})
+        return
+    if action.kind == "selectOption":
+        if not action.selector:
+            raise RuntimeError("Discovery action selectOption missing selector")
+        value = _interpolate(action.value, parameters) or ""
+        locator = page.locator(action.selector)
+        try:
+            locator.select_option(label=value, timeout=10000)
+        except Exception:
+            locator.select_option(value=value, timeout=10000)
+        logger.info("Discovery selectOption", {"selector": action.selector, "value": "***REDACTED***" if action.sensitive else value})
         return
     if action.kind == "press":
         if not action.selector or not action.key:
@@ -204,10 +512,7 @@ def _execute_discovery_action(page: Page, action: DiscoveryAction, parameters: d
         logger.info("Discovery assertText", {"selector": action.selector, "expected": expected})
         return
     if action.kind == "humanApproval":
-        logger.warn("Discovery human approval requested", {"description": action.description, "risk": action.risk})
-        answer = input(f"Discovery requests human approval: {action.description or action.kind}. Approve? (yes/no): ")
-        if answer.strip().lower() != "yes":
-            raise RuntimeError("Human rejected discovery action")
+        _pause_for_human_intervention(page, logger, action.description or "The agent explicitly requested human help.")
         return
     if action.kind == "screenshot":
         shots_dir = Path("screenshots") / "discovery"
@@ -242,6 +547,86 @@ def _has_step(steps: list[Step], kind: str, selector: str | None = None, output_
         and (output_key is None or step.outputKey == output_key)
         for step in steps
     )
+
+
+def _build_human_steps_from_state_diff(
+    before_state: list[dict[str, str | bool | None]],
+    after_state: list[dict[str, str | bool | None]],
+    starting_index: int,
+) -> list[Step]:
+    before_by_selector = {
+        str(item.get("selector")): item
+        for item in before_state
+        if item.get("selector")
+    }
+    steps: list[Step] = []
+    next_index = starting_index
+
+    for after in after_state:
+        selector = str(after.get("selector") or "")
+        if not selector:
+            continue
+        before = before_by_selector.get(selector)
+        if not before:
+            continue
+        tag = str(after.get("tag") or "")
+        input_type = str(after.get("type") or "")
+        before_value = before.get("value")
+        after_value = after.get("value")
+        before_checked = bool(before.get("checked"))
+        after_checked = bool(after.get("checked"))
+
+        if tag == "select" and before_value != after_value:
+            label = str(after.get("label") or after_value or "")
+            steps.append(
+                Step(
+                    id=f"step-{next_index:03d}-selectOption",
+                    kind="selectOption",
+                    selector=selector,
+                    target=_build_target_spec(selector),
+                    value=label,
+                    description="Human takeover: selected an option during manual intervention",
+                    risk="low",
+                    sensitive=False,
+                    continueOnError=False,
+                )
+            )
+            next_index += 1
+            continue
+
+        if tag in {"input", "textarea"} and input_type not in {"checkbox", "radio"} and before_value != after_value:
+            steps.append(
+                Step(
+                    id=f"step-{next_index:03d}-fill",
+                    kind="fill",
+                    selector=selector,
+                    target=_build_target_spec(selector),
+                    value=str(after_value or ""),
+                    description="Human takeover: filled a field during manual intervention",
+                    risk="low",
+                    sensitive=False,
+                    continueOnError=False,
+                )
+            )
+            next_index += 1
+            continue
+
+        if tag == "input" and input_type in {"checkbox", "radio"} and before_checked != after_checked:
+            steps.append(
+                Step(
+                    id=f"step-{next_index:03d}-click",
+                    kind="click",
+                    selector=selector,
+                    target=_build_target_spec(selector),
+                    description="Human takeover: toggled a control during manual intervention",
+                    risk="low",
+                    sensitive=False,
+                    continueOnError=False,
+                )
+            )
+            next_index += 1
+
+    return steps
 
 
 def _append_finalize_steps(
@@ -363,6 +748,7 @@ def discover_task_to_artifact(
         try:
             guard.validate_url(start_url)
             page.goto(start_url, wait_until="domcontentloaded")
+            _ensure_handoff_controls(page)
 
             initial_context = _page_context(
                 page,
@@ -388,6 +774,7 @@ def discover_task_to_artifact(
                     experiment_fake_screenshot_path=experiment_fake_screenshot_path,
                     experiment_drop_dom_summary=experiment_drop_dom_summary,
                 )
+                _ensure_handoff_controls(page)
                 logger.info(
                     "Discovery observe",
                     {
@@ -409,6 +796,24 @@ def discover_task_to_artifact(
                 )
                 logger.info("LLM decision", {"step": index, "thought": redacted_thought, "action": decision.action.model_dump()})
 
+                if _consume_manual_pause_request(page):
+                    human_notes, before_state, after_state = _pause_for_human_intervention(page, logger, "Manual pause requested by the operator.")
+                    human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1)
+                    if human_steps:
+                        artifact.steps.extend(human_steps)
+                        logger.info("Discovery recorded human intervention steps", {"count": len(human_steps), "step_ids": [step.id for step in human_steps]})
+                    logger.info("Discovery pending action discarded after human intervention", {"step": index, "kind": decision.action.kind, "selector": decision.action.selector, "notes": human_notes})
+                    continue
+
+                if decision.action.risk == "high":
+                    human_notes, before_state, after_state = _pause_for_human_intervention(page, logger, decision.action.description or "High-risk action requires human intervention.")
+                    human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1)
+                    if human_steps:
+                        artifact.steps.extend(human_steps)
+                        logger.info("Discovery recorded human intervention steps", {"count": len(human_steps), "step_ids": [step.id for step in human_steps]})
+                    logger.info("Discovery pending action discarded after human intervention", {"step": index, "kind": decision.action.kind, "selector": decision.action.selector, "notes": human_notes})
+                    continue
+
                 if decision.action.kind == "done":
                     break
 
@@ -428,9 +833,15 @@ def discover_task_to_artifact(
                         )
                         logger.info("Discovery heuristic override", {"step": index, "action": decision.action.model_dump()})
                     else:
-                        raise RuntimeError("Discovery got stuck repeating the same action")
+                        human_notes, before_state, after_state = _pause_for_human_intervention(page, logger, "The agent appears stuck repeating the same action.")
+                        human_steps = _build_human_steps_from_state_diff(before_state, after_state, len(artifact.steps) + 1)
+                        if human_steps:
+                            artifact.steps.extend(human_steps)
+                            logger.info("Discovery recorded human intervention steps", {"count": len(human_steps), "step_ids": [step.id for step in human_steps]})
+                        logger.info("Discovery pending action discarded after human intervention", {"step": index, "kind": decision.action.kind, "selector": decision.action.selector, "notes": human_notes})
+                        continue
 
-                temp_step = _action_to_step(index, decision.action)
+                temp_step = _action_to_step(len(artifact.steps) + 1, decision.action)
                 guard.validate_step(temp_step)
                 _execute_discovery_action(page, decision.action, parameters, logger)
                 artifact.steps.append(temp_step)

@@ -18,10 +18,6 @@
       .toolbar { margin-top: 1rem; display: flex; gap: 0.75rem; align-items: center; }
       .primary { background: #0b63f6; color: white; border: none; cursor: pointer; }
       .secondary { background: #eef3fb; color: #1c3557; border: 1px solid #c8d6eb; cursor: pointer; }
-      .gate { margin-top: 1rem; padding: 1rem; border-radius: 12px; background: #fff7e6; border: 1px solid #f1d79a; }
-      .gate strong { display: block; margin-bottom: 0.35rem; }
-      .checkbox-row { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.75rem; }
-      .checkbox-row input { width: 18px; height: 18px; padding: 0; }
       .result { margin-top: 1.25rem; padding: 1rem; border-radius: 12px; background: #f7f9fc; border: 1px solid #e1e8f2; }
       .result-row { display: flex; gap: 1rem; margin-top: 0.35rem; }
       .result-label { width: 140px; font-weight: 600; color: #35506f; }
@@ -37,7 +33,7 @@
         <div class="pill">Demo requiring HITL-friendly intervention</div>
       </div>
       <div class="body">
-        <p>This demo intentionally adds more fields and a manual compliance gate before a balance can be revealed.</p>
+        <p>This demo intentionally adds more fields and a more complex form flow before a balance can be revealed.</p>
 
         <div class="grid">
           <div class="field">
@@ -75,15 +71,6 @@
           </div>
         </div>
 
-        <div id="compliance-gate" class="gate">
-          <strong>Manual compliance checkpoint</strong>
-          <div>A human operator must confirm the member has given consent before revealing financial data.</div>
-          <div class="checkbox-row">
-            <input id="consent-checkbox" type="checkbox" />
-            <label for="consent-checkbox">I manually verified consent for this lookup.</label>
-          </div>
-        </div>
-
         <div id="validation-banner" class="banner hidden"></div>
 
         <div class="toolbar">
@@ -112,7 +99,6 @@
       const memberNumber = document.getElementById('member-number');
       const agentCode = document.getElementById('agent-code');
       const caseNote = document.getElementById('case-note');
-      const consentCheckbox = document.getElementById('consent-checkbox');
       const validationBanner = document.getElementById('validation-banner');
       const reviewBtn = document.getElementById('review-btn');
       const resetBtn = document.getElementById('reset-btn');
@@ -159,12 +145,6 @@
           statusText.textContent = 'Blocked: case note required';
           return;
         }
-        if (!consentCheckbox.checked) {
-          setBanner('Manual consent confirmation is required before revealing the balance.');
-          statusText.textContent = 'Blocked: manual consent required';
-          return;
-        }
-
         statusText.textContent = 'Review completed';
         regionText.textContent = regionSelect.options[regionSelect.selectedIndex].text;
         modeText.textContent = lookupMode.options[lookupMode.selectedIndex].text;
@@ -177,7 +157,6 @@
         memberNumber.value = '';
         agentCode.value = '';
         caseNote.value = '';
-        consentCheckbox.checked = false;
         clearBanner();
         statusText.textContent = 'Awaiting review';
         regionText.textContent = '--';

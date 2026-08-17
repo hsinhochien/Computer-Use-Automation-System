@@ -1,0 +1,239 @@
+{
+  "version": "1.0",
+  "artifactId": "member-balance-query",
+  "name": "Member Balance Query",
+  "description": "LLM-driven discovered workflow | thoughts: Start by selecting the required region from the dropdown. | Region is already set to North America. Next set the lookup mode to Member ID using the dropdown. | Region and lookup mode are already set. Next fill the member number before other required fields and submission. | Member ID is already filled. The next required field from the task is agent code before reviewing. | The remaining required field is the case note before reviewing the balance. Fill it with a concise reason. | All required fields appear filled, including member ID, region, lookup mode, agent code, and a case note. The next safe step is to submit the review request to reveal the balance. | The balance result is already visible and meaningful, so the task is complete without further interaction.",
+  "taskTemplate": "Check the balance for member {{memberId}}",
+  "createdAt": "2026-08-17T22:40:09.257637Z",
+  "startUrl": "http://localhost:8000/examples/complex_hitl_demo.html",
+  "parameters": [
+    {
+      "name": "memberId",
+      "type": "string",
+      "required": true,
+      "secret": false,
+      "description": "Member identifier"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "balance",
+      "type": "string",
+      "description": "Member balance text",
+      "sensitive": true
+    }
+  ],
+  "successCondition": {
+    "type": "text_not_equals",
+    "selector": "[data-role=\"balance-text\"]",
+    "expectedText": "--",
+    "description": "The result element should contain a resolved balance instead of the placeholder."
+  },
+  "safety": {
+    "redactInputs": true,
+    "redactOutputs": true,
+    "allowedDomains": [
+      "localhost"
+    ],
+    "blockedActions": [
+      "delete",
+      "submit_payment",
+      "export_data",
+      "admin_change"
+    ]
+  },
+  "steps": [
+    {
+      "id": "step-001-selectOption",
+      "kind": "selectOption",
+      "selector": "#region-select",
+      "target": {
+        "strategy": "css",
+        "primary": "#region-select",
+        "fallbacks": [],
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
+      },
+      "url": null,
+      "value": "North America",
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Select North America as the region"
+    },
+    {
+      "id": "step-002-selectOption",
+      "kind": "selectOption",
+      "selector": "#lookup-mode",
+      "target": {
+        "strategy": "css",
+        "primary": "#lookup-mode",
+        "fallbacks": [],
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
+      },
+      "url": null,
+      "value": "Member ID",
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Select Member ID as the lookup mode"
+    },
+    {
+      "id": "step-003-fill",
+      "kind": "fill",
+      "selector": "#member-number",
+      "target": {
+        "strategy": "css",
+        "primary": "#member-number",
+        "fallbacks": [],
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
+      },
+      "url": null,
+      "value": "12345",
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Enter member number 12345"
+    },
+    {
+      "id": "step-004-fill",
+      "kind": "fill",
+      "selector": "#agent-code",
+      "target": {
+        "strategy": "css",
+        "primary": "#agent-code",
+        "fallbacks": [],
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
+      },
+      "url": null,
+      "value": "AGENT-77",
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Enter the agent code AGENT-77"
+    },
+    {
+      "id": "step-005-fill",
+      "kind": "fill",
+      "selector": "#case-note",
+      "target": {
+        "strategy": "css",
+        "primary": "#case-note",
+        "fallbacks": [],
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
+      },
+      "url": null,
+      "value": "啊噠噠",
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Human takeover: filled a field during manual intervention"
+    },
+    {
+      "id": "step-006-click",
+      "kind": "click",
+      "selector": "#review-btn",
+      "target": {
+        "strategy": "css",
+        "primary": "#review-btn",
+        "fallbacks": [],
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
+      },
+      "url": null,
+      "value": null,
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Click the Review balance button to retrieve the member balance"
+    },
+    {
+      "id": "step-007-waitFor",
+      "kind": "waitFor",
+      "selector": "[data-role=\"balance-text\"]",
+      "target": {
+        "strategy": "css",
+        "primary": "[data-role=\"balance-text\"]",
+        "fallbacks": [],
+        "robustness": "medium",
+        "reasoning": "CSS selector captured during discovery"
+      },
+      "url": null,
+      "value": null,
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": false,
+      "continueOnError": false,
+      "description": "Wait for the balance result to appear"
+    },
+    {
+      "id": "step-008-extractText",
+      "kind": "extractText",
+      "selector": "[data-role=\"balance-text\"]",
+      "target": {
+        "strategy": "css",
+        "primary": "[data-role=\"balance-text\"]",
+        "fallbacks": [],
+        "robustness": "medium",
+        "reasoning": "CSS selector captured during discovery"
+      },
+      "url": null,
+      "value": null,
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": "balance",
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": true,
+      "continueOnError": false,
+      "description": "Extract the balance text"
+    },
+    {
+      "id": "step-009-screenshot",
+      "kind": "screenshot",
+      "selector": null,
+      "target": null,
+      "url": null,
+      "value": null,
+      "key": null,
+      "timeoutMs": null,
+      "outputKey": null,
+      "expectedText": null,
+      "risk": "low",
+      "sensitive": true,
+      "continueOnError": false,
+      "description": "Save a screenshot of the result"
+    }
+  ]
+}

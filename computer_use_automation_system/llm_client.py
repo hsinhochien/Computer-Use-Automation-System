@@ -60,6 +60,7 @@ class LLMClient:
             "If the member ID is already filled, prefer clicking the search button instead of filling again. "
             "If the balance result is visible and meaningful, prefer extractText or done. "
             "If the task is complete, return action.kind='done'. "
+            "If the target is a dropdown or <select> element, use action.kind='selectOption' instead of fill. "
             "If a step is risky or uncertain, return action.kind='humanApproval'. "
             "Do not reveal secrets."
         )
@@ -68,7 +69,7 @@ class LLMClient:
             f"Page context: {json.dumps(page_context, ensure_ascii=False)}\n"
             f"Action history: {json.dumps(action_history, ensure_ascii=False)}\n\n"
             "Return JSON with this exact shape:\n"
-            '{"thought":"...","action":{"kind":"click|fill|waitFor|extractText|assertText|goto|press|humanApproval|screenshot|done",'
+            '{"thought":"...","action":{"kind":"click|fill|selectOption|waitFor|extractText|assertText|goto|press|humanApproval|screenshot|done",'
             '"selector":null,"url":null,"value":null,"key":null,"outputKey":null,"expectedText":null,'
             '"description":"...","risk":"low|medium|high","sensitive":false,"continueOnError":false}}'
         )

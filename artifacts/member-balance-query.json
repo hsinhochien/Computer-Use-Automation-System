@@ -2,10 +2,10 @@
   "version": "1.0",
   "artifactId": "member-balance-query",
   "name": "Member Balance Query",
-  "description": "LLM-driven discovered workflow | thoughts: The member number field is empty and a reliable selector is available, so the next step is to fill in the requested member ID. | The member ID is already filled and the balance has not been revealed yet, so the next safe step is to click the primary reveal/search button. | The balance is already visible and meaningful, so the task is complete.",
+  "description": "LLM-driven discovered workflow | thoughts: The member ID field is empty and the balance has not been searched yet, so the next step is to enter the provided member ID into the input field. | The member ID is already filled and the balance is not yet available, so the next step is to click the Search button. | The balance result is already visible and meaningful, so the task is complete.",
   "taskTemplate": "Check the balance for member {{memberId}}",
-  "createdAt": "2026-08-16T21:44:07.086866Z",
-  "startUrl": "http://localhost:8000/examples/vision_demo.html",
+  "createdAt": "2026-08-17T22:48:55.541946Z",
+  "startUrl": "http://localhost:8000/examples/demo.html",
   "parameters": [
     {
       "name": "memberId",
@@ -25,7 +25,7 @@
   ],
   "successCondition": {
     "type": "text_not_equals",
-    "selector": "[data-role=\"balance-text\"]",
+    "selector": "#balance",
     "expectedText": "--",
     "description": "The result element should contain a resolved balance instead of the placeholder."
   },
@@ -46,13 +46,13 @@
     {
       "id": "step-001-fill",
       "kind": "fill",
-      "selector": "input[aria-label=\"Member number\"]",
+      "selector": "#member-id",
       "target": {
         "strategy": "css",
-        "primary": "input[aria-label=\"Member number\"]",
+        "primary": "#member-id",
         "fallbacks": [],
-        "robustness": "medium",
-        "reasoning": "CSS selector captured during discovery"
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
       },
       "url": null,
       "value": "12345",
@@ -63,18 +63,18 @@
       "risk": "low",
       "sensitive": false,
       "continueOnError": false,
-      "description": "Enter member ID 12345 into the member number field"
+      "description": "Enter member ID 12345 into the member ID input field"
     },
     {
       "id": "step-002-click",
       "kind": "click",
-      "selector": "button.cta",
+      "selector": "#search-btn",
       "target": {
         "strategy": "css",
-        "primary": "button.cta",
+        "primary": "#search-btn",
         "fallbacks": [],
-        "robustness": "medium",
-        "reasoning": "CSS selector captured during discovery"
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
       },
       "url": null,
       "value": null,
@@ -85,18 +85,18 @@
       "risk": "low",
       "sensitive": false,
       "continueOnError": false,
-      "description": "Click the Reveal balance button to fetch the member's balance"
+      "description": "Click the Search button to look up the balance for member 12345"
     },
     {
       "id": "step-003-waitFor",
       "kind": "waitFor",
-      "selector": "[data-role=\"balance-text\"]",
+      "selector": "#balance",
       "target": {
         "strategy": "css",
-        "primary": "[data-role=\"balance-text\"]",
+        "primary": "#balance",
         "fallbacks": [],
-        "robustness": "medium",
-        "reasoning": "CSS selector captured during discovery"
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
       },
       "url": null,
       "value": null,
@@ -112,13 +112,13 @@
     {
       "id": "step-004-extractText",
       "kind": "extractText",
-      "selector": "[data-role=\"balance-text\"]",
+      "selector": "#balance",
       "target": {
         "strategy": "css",
-        "primary": "[data-role=\"balance-text\"]",
+        "primary": "#balance",
         "fallbacks": [],
-        "robustness": "medium",
-        "reasoning": "CSS selector captured during discovery"
+        "robustness": "high",
+        "reasoning": "Stable CSS ID selector captured during discovery"
       },
       "url": null,
       "value": null,

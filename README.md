@@ -70,7 +70,7 @@ python -m http.server 8000
 Available local demo pages:
 - `http://localhost:8000/examples/demo.html` — simple DOM-rich balance lookup demo
 - `http://localhost:8000/examples/vision_demo.html` — weaker-DOM / more vision-oriented demo
-- `http://localhost:8000/examples/complex_hitl_demo.html` — more complex multi-field demo with a manual compliance gate
+- `http://localhost:8000/examples/complex_hitl_demo.html` — more complex multi-field demo for same-session human handoff testing
 
 Important:
 - **Discovery** still needs a live LLM API.
@@ -156,10 +156,35 @@ Then replay:
 cuas replay --artifact artifacts/member-balance-query.json --param memberId=12345
 ```
 
+### Demo path C: same-session human handoff demo
+
+Run the complex demo discovery script:
+
+```bash
+conda activate interface
+cd Computer-Use-Automation-System
+zsh scripts/run_complex_demo.sh
+```
+
+While discovery is running, use the in-browser control panel:
+- click **Request manual takeover** to pause at the next safe point,
+- operate the same live browser session manually,
+- optionally enter a note with **Submit note**,
+- then click **Resume** or **Abort** in the same in-browser panel.
+
+Current behavior during human handoff:
+- the pending automation action is discarded after resume,
+- discovery re-observes the updated page state,
+- replayable human-applied form changes are captured into the artifact as steps,
+- and discovery continues from the updated same-session state.
+
 ## 7. Current scope and limitations
 
 - The current system is designed around web automation with Playwright.
 - The included generic observation logic is broader than a single hard-coded page, but it is still shaped by the current balance-query demo family.
-- `humanApproval` is currently a minimal terminal approval gate, not a full same-session human handoff.
+- The current prototype supports a real same-session **human-triggered** handoff during discovery through an in-browser control panel.
+- Human-applied changes are captured in a **v1** form-state-diff mechanism and converted into replayable artifact steps for common controls such as text inputs, textareas, selects, and some toggles.
+- Agent-triggered escalation is only partially implemented at the moment. Basic triggers include `humanApproval`, high-risk actions, and repeated-action stuck detection.
 - Replay depends on the recorded selectors and result region captured during discovery.
 - The implementation includes screenshot-based multimodal discovery, but replay itself remains deterministic and selector-driven.
+- Human action capture is not yet a full low-level event recorder; button-click inference and richer operator action capture remain future work.

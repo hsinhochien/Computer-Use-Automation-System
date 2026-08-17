@@ -12,177 +12,191 @@ Requires-Dist: openai>=1.40.0
 
 # Computer-Use Automation System
 
-A Python implementation of a Computer-Use Automation System that supports:
+This repository implements a browser-based computer-use automation prototype with two phases:
 
-- Discovery: an LLM observes the current page and decides the next UI action step by step
-- Hybrid perception: discovery can use DOM-derived structure, screenshot-based multimodal input, or both
-- Artifact Emission: after successful discovery, the executed actions are recorded as a strongly typed YAML/JSON artifact
-- Deterministic Replay: the artifact is replayed later with Playwright without calling the LLM again
-- Human-in-the-loop: risky or uncertain steps pause for human approval
-- Safety: domain restrictions, dangerous-action blocking, and sensitive-data masking
+1. **Discovery**: an LLM observes the current page and records an executable artifact.
+2. **Replay**: the artifact is executed deterministically without calling the LLM again.
 
-## 專案結構
-- `computer_use_automation_system/`：Python 主程式
-- `artifacts/`：可重播流程產物
-- `examples/demo.html`：DOM-rich demo 頁面
-- `examples/vision_demo.html`：較偏 vision / weaker-DOM 的 demo 頁面
+The current implementation is web-focused and uses Playwright for browser automation.
 
-## 環境安裝（Conda: interface）
-請先啟用你已建立好的 conda 環境：
+## 1. Setup
 
+### Requirements
+- Python 3.10+
+- Playwright Chromium
+- An LLM API key for discovery
+
+### Install
 ```bash
 conda activate interface
-```
-
-安裝專案依賴：
-
-```bash
 cd Computer-Use-Automation-System
 python -m pip install -e .
 python -m playwright install chromium
 ```
 
-## LLM API Key 與 `.env`
-對，若你有自己的 LLM API key，建議放在專案根目錄的 `.env`。
+## 2. Configuration
 
-由於編輯器對 `.env` 檔名有安全限制，專案提供的是 `env.example` 範本。你可以自行複製成 `.env`：
+Create a `.env` file in the repository root.
+
+You can start from the template:
 
 ```bash
-cd Computer-Use-Automation-System
 cp env.example .env
 ```
 
-然後把 `.env` 改成你的實際設定。
-
-### OpenAI-compatible 範例
+### Option A: OpenAI-compatible API
 ```bash
 LLM_PROVIDER=openai_compatible
-LLM_API_KEY=你的_api_key
+LLM_API_KEY=your_api_key_here
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=gpt-4o-mini
 LLM_TIMEOUT_SECONDS=60
 ```
 
-### Azure OpenAI 範例
+### Option B: Azure OpenAI
 ```bash
 LLM_PROVIDER=azure_openai
-LLM_API_KEY=你的_azure_openai_key
-LLM_BASE_URL=https://你的資源名稱.openai.azure.com/
-LLM_MODEL=你的deployment名稱
+LLM_API_KEY=your_azure_openai_key_here
+LLM_BASE_URL=https://your-resource-name.openai.azure.com/
+LLM_MODEL=your_deployment_name
 LLM_TIMEOUT_SECONDS=60
 AZURE_OPENAI_API_VERSION=2024-12-01-preview
 ```
 
-> 在 Azure OpenAI 中，`LLM_MODEL` 請填 deployment name，不一定是原始模型名稱。
->
-> `.gitignore` 已忽略 `.env`，不要把真實金鑰提交到 git。
+Notes:
+- For Azure OpenAI, `LLM_MODEL` must be the deployment name.
+- Discovery requires a live LLM because the system asks the model to decide the next action.
+- Replay does **not** require the LLM and can run offline once an artifact has already been generated.
 
-## 使用方式
+## 3. Running without live services
 
-### 1) Discovery: let the LLM drive the browser and record an artifact
-```bash
-cuas discover --task "Check the balance for member 12345" --url "https://example.com/member-search" --use-llm
-```
+You can run the included demos locally without any external website.
 
-You can also limit the maximum number of discovery steps:
-
-```bash
-cuas discover --task "Check the balance for member 12345" --url "https://example.com/member-search" --use-llm --max-steps 12
-```
-
-You can also specify an output file:
-
-```bash
-cuas discover --task "Check the balance for member 12345" --url "https://example.com/member-search" --output artifacts/member-balance.json
-```
-
-You can control screenshot usage during discovery:
-
-```bash
-cuas discover --task "Check the balance for member 12345" --url "https://example.com/member-search" --use-llm --image-mode auto
-```
-
-Available values:
-- `auto`: send screenshots only when the DOM signal is sparse or degraded
-- `always`: always send the current screenshot to the LLM as multimodal input
-- `never`: do not send screenshots; use only structured page context
-
-### 2) Replay: run the artifact deterministically without calling the LLM
-```bash
-cuas replay --artifact artifacts/sample-member-balance.json --param memberId=12345
-```
-
-To run in headless mode:
-
-```bash
-cuas replay --artifact artifacts/sample-member-balance.json --param memberId=12345 --headless
-```
-
-## 本地 demo 測試
-你可以先開一個靜態伺服器來測試 `examples/demo.html`，例如：
+Start a local static server:
 
 ```bash
 cd Computer-Use-Automation-System
 python -m http.server 8000
 ```
 
-Then generate an artifact with:
+Available local demo pages:
+- `http://localhost:8000/examples/demo.html` — simple DOM-rich balance lookup demo
+- `http://localhost:8000/examples/vision_demo.html` — weaker-DOM / more vision-oriented demo
+- `http://localhost:8000/examples/complex_hitl_demo.html` — more complex multi-field demo for same-session human handoff testing
+
+Important:
+- **Discovery** still needs a live LLM API.
+- **Replay** can run without the LLM once you already have an artifact.
+
+## 4. Discovery command
+
+Basic example:
 
 ```bash
 cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/demo.html" --use-llm
 ```
 
-You can also compare DOM-rich vs vision-assisted behavior:
+Useful options:
 
 ```bash
-cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/demo.html" --use-llm --image-mode never
-cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/demo.html" --use-llm --image-mode always
+cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/demo.html" --use-llm --max-steps 12 --image-mode auto --output artifacts/member-balance-query.json
 ```
 
-For the weaker-DOM demo:
+### Screenshot modes
+- `--image-mode auto`: send screenshots only when the DOM signal is sparse or degraded
+- `--image-mode always`: always send the screenshot as multimodal input
+- `--image-mode never`: do not send screenshots; use only structured page context
 
-```bash
-cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/vision_demo.html" --use-llm --image-mode never
-cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/vision_demo.html" --use-llm --image-mode always
-```
+## 5. Replay command
 
-Then replay it with:
+Replay uses a saved artifact and does not call the LLM.
 
 ```bash
 cuas replay --artifact artifacts/member-balance-query.json --param memberId=12345
 ```
 
-## Artifact 格式特性
-每個 artifact 會包含：
-- `parameters`：輸入參數定義
-- `outputs`：輸出契約，例如 `balance`
-- `successCondition`：成功條件
-- `safety`：安全策略
-- `steps`：逐步操作清單，例如 goto / click / fill / extractText / humanApproval
+Optional headless mode:
 
-Discovery 會將 balance extraction 的 `outputKey` 正規化為 `balance`，避免同一結果在 artifact 中出現多個不同 key（例如 `balance_text` 與 `balance`）。
+```bash
+cuas replay --artifact artifacts/member-balance-query.json --param memberId=12345 --headless
+```
 
-## Perception strategy / write-up
+Optional JSON output:
 
-### DOM-rich vs vision-assisted discovery
-這個 prototype 現在支援 hybrid perception：
-- **DOM-rich path**：當頁面有足夠穩定的結構訊號時，LLM 可主要依賴 DOM-derived summary 與 generic page hints 來決策。
-- **Vision-assisted path**：當 DOM 訊號較弱、較稀疏，或你強制使用 `--image-mode always` 時，系統會把當前 screenshot 真的以 multimodal image input 傳給 LLM，而不只是傳遞 screenshot path 字串。
+```bash
+cuas replay --artifact artifacts/member-balance-query.json --param memberId=12345 --json
+```
 
-### Screenshot policy
-- `--image-mode auto`：預設策略。DOM 訊號足夠時不一定送圖；DOM 稀疏、實驗模式或 observation degraded 時送圖。
-- `--image-mode always`：每一步都送 screenshot，適合驗證視覺感知能力。
-- `--image-mode never`：不送 screenshot，適合做 ablation / 對照實驗。
+## 6. Demo path
 
-### Current findings from the demos
-- 在 `examples/demo.html` 這種 DOM-rich surface 上，vision 不是必要條件，因為 DOM summary 與 generic hints 已足以完成 discovery。
-- 在 `examples/vision_demo.html` 這種較弱 DOM surface 上，vision 雖然不是唯一成功條件，但能讓模型更早判斷畫面已完成、減少多餘步驟，讓 artifact 更乾淨。
-- 這表示目前架構不是純 DOM bot，而是逐步走向 DOM + screenshot 的 hybrid computer-use agent。
+This section gives an exact end-to-end path: discover a workflow, save the artifact, then replay it.
 
-## 目前限制
-目前 replay 仍主要依賴 recorded selectors / targets 來執行，因此這版仍以 web surface 為主，尚未實作 desktop adapter、OCR adapter 或真正的 cross-surface action layer。這版已滿足：LLM 探索一次、錄製 artifact、後續 deterministic replay、以及 HITL / safety 骨架。
+### Demo path A: simple DOM-rich demo
 
-若你使用 Azure OpenAI，程式目前改走 `chat.completions.create(...)`，通常比 `responses.create(...)` 更穩定。你仍需確認：
-- endpoint 正確
-- deployment name 正確
-- API version 與你的 Azure 資源相容
+Start the local server:
+
+```bash
+cd Computer-Use-Automation-System
+python -m http.server 8000
+```
+
+In another terminal, run discovery:
+
+```bash
+conda activate interface
+cd Computer-Use-Automation-System
+cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/demo.html" --use-llm --max-steps 12 --image-mode auto --output artifacts/member-balance-query.json
+```
+
+Then replay the generated artifact:
+
+```bash
+cuas replay --artifact artifacts/member-balance-query.json --param memberId=12345
+```
+
+### Demo path B: weaker-DOM / vision-assisted demo
+
+Run discovery with screenshots always enabled:
+
+```bash
+cuas discover --task "Check the balance for member 12345" --url "http://localhost:8000/examples/vision_demo.html" --use-llm --max-steps 12 --image-mode always --output artifacts/member-balance-query.json
+```
+
+Then replay:
+
+```bash
+cuas replay --artifact artifacts/member-balance-query.json --param memberId=12345
+```
+
+### Demo path C: same-session human handoff demo
+
+Run the complex demo discovery script:
+
+```bash
+conda activate interface
+cd Computer-Use-Automation-System
+zsh scripts/run_complex_demo.sh
+```
+
+While discovery is running, use the in-browser control panel:
+- click **Request manual takeover** to pause at the next safe point,
+- operate the same live browser session manually,
+- optionally enter a note with **Submit note**,
+- then click **Resume** or **Abort** in the same in-browser panel.
+
+Current behavior during human handoff:
+- the pending automation action is discarded after resume,
+- discovery re-observes the updated page state,
+- replayable human-applied form changes are captured into the artifact as steps,
+- and discovery continues from the updated same-session state.
+
+## 7. Current scope and limitations
+
+- The current system is designed around web automation with Playwright.
+- The included generic observation logic is broader than a single hard-coded page, but it is still shaped by the current balance-query demo family.
+- The current prototype supports a real same-session **human-triggered** handoff during discovery through an in-browser control panel.
+- Human-applied changes are captured in a **v1** form-state-diff mechanism and converted into replayable artifact steps for common controls such as text inputs, textareas, selects, and some toggles.
+- Agent-triggered escalation is only partially implemented at the moment. Basic triggers include `humanApproval`, high-risk actions, and repeated-action stuck detection.
+- Replay depends on the recorded selectors and result region captured during discovery.
+- The implementation includes screenshot-based multimodal discovery, but replay itself remains deterministic and selector-driven.
+- Human action capture is not yet a full low-level event recorder; button-click inference and richer operator action capture remain future work.

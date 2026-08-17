@@ -60,6 +60,21 @@ def run_step(page: Page, step: Step, parameters: dict[str, str], logger: Logger,
         page.locator(step.selector).fill(value, timeout=step.timeoutMs or 10000)
         return
 
+    if step.kind == "selectOption":
+        if not step.selector:
+            raise RuntimeError(f"Step {step.id} missing selector")
+        value = interpolate(step.value, parameters) or ""
+        logger.info(
+            "SelectOption",
+            {"stepId": step.id, "selector": step.selector, "value": guard.mask_value(step, value)},
+        )
+        locator = page.locator(step.selector)
+        try:
+            locator.select_option(label=value, timeout=step.timeoutMs or 10000)
+        except Exception:
+            locator.select_option(value=value, timeout=step.timeoutMs or 10000)
+        return
+
     if step.kind == "press":
         if not step.selector or not step.key:
             raise RuntimeError(f"Step {step.id} missing selector or key")
