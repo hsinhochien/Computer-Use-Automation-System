@@ -2,9 +2,9 @@
   "version": "1.0",
   "artifactId": "member-balance-query",
   "name": "Member Balance Query",
-  "description": "LLM-driven discovered workflow | thoughts: Start by selecting the required region from the dropdown. | Region is already set to North America. Next required step is to set lookup mode to Member ID before filling the remaining fields. | Region and lookup mode are already set. Next fill the member number before other required fields and submission. | Region, lookup mode, and member ID are already set. The next required field before reviewing is agent code; fill it now. | The required fields are set except the case note, which must be added before reviewing the balance. | The balance result is already visible and meaningful (USD 2,500), and the review appears complete. The case note was changed during human intervention, so I should not overwrite it. Task can be concluded.",
+  "description": "LLM-driven discovered workflow | thoughts: Start by selecting the required region from the dropdown. | Region is already set to North America. Next, set the lookup mode to Member ID before filling the remaining fields. | Region and lookup mode are already set. Next fill the member number before other required fields and review. | Region, lookup mode, and member ID are already set. The next required field to complete the review flow is agent code before adding the case note and submitting. | The required fields are set except the case note, which must be added before reviewing the balance. Fill the case note next. | All required fields are already populated, including the human-updated case note, and the balance is not yet shown. The next safe step is to submit the review request. | The balance result is already visible and meaningful, so the task is complete. A human-entered case note is present and should not be reverted.",
   "taskTemplate": "Check the balance for member {{memberId}}",
-  "createdAt": "2026-08-17T23:43:54.601422Z",
+  "createdAt": "2026-08-17T23:51:39.078522Z",
   "startUrl": "http://localhost:8000/examples/complex_hitl_demo.html",
   "parameters": [
     {
@@ -143,7 +143,7 @@
         "reasoning": "Stable CSS ID selector captured during discovery"
       },
       "url": null,
-      "value": "逼逼啦不",
+      "value": "testing",
       "key": null,
       "timeoutMs": null,
       "outputKey": null,
@@ -173,7 +173,7 @@
       "risk": "low",
       "sensitive": false,
       "continueOnError": false,
-      "description": "Human takeover: triggered the primary review action during manual intervention"
+      "description": "Click the Review balance button to retrieve the member balance."
     },
     {
       "id": "step-007-waitFor",
